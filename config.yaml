@@ -1,0 +1,55 @@
+# Konfiguration for kafferepet-dl.
+# Vid deploy ligger denna fil i /state/config.yaml (Unraid appdata).
+# Sokvagarna nedan ar container-interna och fasta - host-sidan monteras
+# via docker-compose (se DOCKER.md / spec 9).
+
+defaults:
+  audio_format: "m4a"          # m4a (AAC) - bra kompromiss, bred kompatibilitet
+  audio_quality: "0"           # 0 = basta kvalitet
+  video_format: "bv*+ba/b"     # basta video+ljud, fallback basta kombinerade
+  video_container: "mp4"       # remux till mp4 for Plex-vanlighet
+  embed_metadata: true
+  embed_thumbnail: true
+  number_padding: 4            # filnamn/Titel-tagg: 4 siffror (0007, 0123) [F3]
+  on_missing_number: "omit"    # omit | placeholder | skip [F2]
+  filename_separator: " - "    # informativt - filnamnsbygget ar kodlast [F1]
+  write_description: false
+  dateafter: null              # valfri sakerhetssparr; null = hamta allt i spellistan
+  sleep_requests: 2            # snall mot YouTube, undvik rate-limit
+  concurrent_fragments: 4
+  tmp_root: "/state/tmp"       # arbetsmapp dar ljud post-processas innan flytt
+  run_once: false              # informativt; korningen ar alltid en engangskorning
+
+shows:
+  - name: "Kafferepet"
+    playlist_id: "PLe409X5iJuqT4y0xaYzMwxlUWkoBkmy63"
+    # Nummer EFTER titel, t.ex. "Framfordrommar - 243"
+    title_regex: '^\s*(?P<title>.+?)\s*[-–—]\s*(?P<num>\d+)\s*$'
+    tracks:
+      audio:
+        enabled: true
+        output_dir: "/podcasts/kafferepet"
+        archive: "/state/archive_audio_kafferepet.txt"
+        retention_days: 0       # 0 = behall for evigt
+      video:
+        enabled: true
+        output_dir: "/plex/Kafferepet"
+        archive: "/state/archive_video_kafferepet.txt"
+        retention_days: 0
+
+  - name: "Brända kakor"
+    playlist_id: "PLe409X5iJuqS2s2G1s6ZdOPxv52pqU5Om"
+    # Nummer FORE titel, t.ex. "Brända kakor 123 - Stop". (?i) gor showprefixet
+    # tolerant mot framtida felstavning.
+    title_regex: '(?i)^\s*Brända\s+kakor\s+(?P<num>\d+)\s*[-–—]\s*(?P<title>.+?)\s*$'
+    tracks:
+      audio:
+        enabled: true
+        output_dir: "/podcasts/brandakakor"
+        archive: "/state/archive_audio_brandakakor.txt"
+        retention_days: 0
+      video:
+        enabled: true
+        output_dir: "/plex/Brandakakor"
+        archive: "/state/archive_video_brandakakor.txt"
+        retention_days: 0

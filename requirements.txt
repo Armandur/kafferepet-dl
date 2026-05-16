@@ -1,0 +1,5 @@
+# Pinnade versioner (spec 8). yt-dlp uppdateras anda vid containerstart via
+# entrypoint.sh - pinningen ar en fallback om uppdateringen misslyckas.
+yt-dlp==2026.3.17
+mutagen==1.47.0
+PyYAML==6.0.3
