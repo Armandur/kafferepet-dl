@@ -4,13 +4,32 @@ Projektet distribueras som en **Docker-image** (ingen docker-compose). Lokalt
 körs den med `docker run`, på Unraid läggs den till som en container via
 Unraids "Add Container"-mall.
 
-## Bygga imagen
+## Imagen
 
-```bash
-docker build -t kafferepet-dl:latest .
+GitHub Actions bygger och publicerar imagen automatiskt vid varje push till
+`main` och vid `v*`-taggar (`.github/workflows/docker-publish.yml`):
+
+```
+ghcr.io/armandur/kafferepet-dl:latest        senaste main
+ghcr.io/armandur/kafferepet-dl:sha-<sha>     specifik commit
+ghcr.io/armandur/kafferepet-dl:vX.Y.Z        vid v-taggar
 ```
 
-(När CI är uppsatt byggs och pushas imagen till `ghcr.io/armandur/kafferepet-dl`.)
+Hämta den:
+
+```bash
+docker pull ghcr.io/armandur/kafferepet-dl:latest
+```
+
+Ghcr-paketet är privat tills det görs publikt en gång (Package settings ->
+Change visibility). Är det privat måste Unraid logga in mot ghcr.io med en
+PAT som har `read:packages`.
+
+Bygga lokalt för test:
+
+```bash
+docker build -t kafferepet-dl:test .
+```
 
 ## Volymer
 
@@ -74,7 +93,7 @@ för en full körning. `config.yaml` måste ligga i `$BASE/state/`.
 
 ## Deploy på Unraid
 
-1. Bygg eller hämta imagen.
+1. Hämta imagen: `docker pull ghcr.io/armandur/kafferepet-dl:latest`.
 2. Skapa de fem host-mapparna; lägg `config.yaml` i `/state`-mappen.
 3. Skapa de två Plex-biblioteken som typen **Other Videos** (Personal Media).
 4. "Add Container" i Unraid:
