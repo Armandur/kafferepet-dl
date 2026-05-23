@@ -10,6 +10,7 @@ from app import importer, jobs
 from app.archive import remove_id
 from app.config import PROJECT_ROOT, settings
 from app.episodes import find_video_file
+from downloader import episode_index
 from downloader.config import load_config
 from downloader.lock import Lock, is_held
 
@@ -55,8 +56,8 @@ async def get_episodes(request: Request, refresh: int = 0):
     return await request.app.state.episodes.get(refresh=bool(refresh))
 
 
-@router.delete("/episodes/{video_id}")
-async def delete_episode(request: Request, video_id: str):
+@router.delete("/episodes/{ep_id}")
+async def delete_episode(request: Request, ep_id: str):
     p = await request.json()
     show_name = p.get("show")
     track_kind = p.get("track")
@@ -75,17 +76,35 @@ async def delete_episode(request: Request, video_id: str):
     if not lock.acquire():
         return JSONResponse({"ok": False, "error": "körning pågår, vänta"},
                             status_code=409)
+    file_deleted = False
+    archive_deleted = False
     try:
-        file_deleted = False
-        archive_deleted = False
-        if track_kind == "video":
-            f = find_video_file(show, video_id)
-            if f is not None:
-                f.unlink()
+        if ep_id.startswith("local_"):
+            # Bonus-avsnitt: anvand metadata for sokvag.
+            meta = episode_index.find(show_name, ep_id)
+            if meta is None:
+                return JSONResponse({"ok": False,
+                                     "error": "okand bonus-avsnitt"}, 404)
+            path_str = meta.get(f"{track_kind}_path")
+            if path_str and Path(path_str).is_file():
+                Path(path_str).unlink()
                 file_deleted = True
-        # Audio: filnamnet har inte id - vi raderar inte filen automatiskt.
-        if not keep_archive:
-            archive_deleted = remove_id(track.archive, video_id)
+            episode_index.set_path(show_name, ep_id, track_kind, None)
+        else:
+            # YouTube-id: anvand arkiv + filnamnssokning for video.
+            if track_kind == "video":
+                f = find_video_file(show, ep_id)
+                if f is not None:
+                    f.unlink()
+                    file_deleted = True
+            if not keep_archive:
+                archive_deleted = remove_id(track.archive, ep_id)
+            episode_index.set_path(show_name, ep_id, track_kind, None)
+        # Om bada paths nu rensade och inget arkiv -> ta bort posten helt.
+        meta = episode_index.find(show_name, ep_id)
+        if (meta and not meta.get("audio_path") and not meta.get("video_path")
+                and not meta.get("yt_id")):
+            episode_index.remove_episode(show_name, ep_id)
     finally:
         lock.release()
 

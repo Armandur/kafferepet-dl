@@ -21,7 +21,7 @@ from mutagen.id3 import ID3, ID3NoHeaderError
 
 from app.config import PROJECT_ROOT, settings
 from app.jobs import _stream_subprocess
-from downloader import naming, tagging
+from downloader import episode_index, naming, tagging
 from downloader.config import load_config
 
 
@@ -90,7 +90,7 @@ async def import_rss_enclosure(url, show_name, broadcaster):
             return
         await broadcaster.publish({"event": "log",
                                    "line": f"Hämtad: {src.stat().st_size/1e6:.1f} MB"})
-        if await _apply_id3_and_move(src, show, broadcaster):
+        if await _apply_id3_and_move(src, show, broadcaster, source="rss"):
             code = 0
     except Exception as exc:
         await broadcaster.publish({"event": "error", "message": str(exc)})
@@ -118,7 +118,7 @@ async def import_local_file(path_str, show_name, broadcaster):
         tmp_dir.mkdir(parents=True, exist_ok=True)
         src = tmp_dir / src_orig.name
         shutil.copy2(src_orig, src)
-        if await _apply_id3_and_move(src, show, broadcaster):
+        if await _apply_id3_and_move(src, show, broadcaster, source="local"):
             code = 0
     except Exception as exc:
         await broadcaster.publish({"event": "error", "message": str(exc)})
@@ -128,7 +128,7 @@ async def import_local_file(path_str, show_name, broadcaster):
         await broadcaster.publish({"event": "end", "code": code})
 
 
-async def _apply_id3_and_move(src: Path, show, broadcaster) -> bool:
+async def _apply_id3_and_move(src: Path, show, broadcaster, source) -> bool:
     """Las metadata ur ID3, bygg konventionsfilnamn, tagga, flytta.
 
     Returnerar True vid lyckad import, False annars (felmeddelande publiceras).
@@ -176,6 +176,17 @@ async def _apply_id3_and_move(src: Path, show, broadcaster) -> bool:
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, target)
     await broadcaster.publish({"event": "log", "line": f"Skapad: {target}"})
+
+    episode_index.save_episode(
+        show.name,
+        yt_id=None,
+        title=clean_title,
+        upload_date=iso.replace("-", "") if iso else None,
+        duration=None,
+        thumbnail_url=None,
+        source=source,
+        audio_path=str(target),
+    )
     return True
 
 

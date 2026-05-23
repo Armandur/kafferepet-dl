@@ -128,25 +128,81 @@
     }
   }
 
+  const PAGE_SIZE = 24;
+  const pageState = {};
+
   function renderEpisodes(data) {
     epsContainer.innerHTML = "";
     for (const show of data.shows) {
-      const sec = document.createElement("div");
-      sec.className = "show-section";
-      const h = document.createElement("h3");
-      h.textContent = `${show.name}  (${show.episodes.length} avsnitt)`;
-      sec.appendChild(h);
-      const grid = document.createElement("div");
-      grid.className = "episode-grid";
-      for (const ep of show.episodes) grid.appendChild(buildCard(show.name, ep));
-      sec.appendChild(grid);
-      epsContainer.appendChild(sec);
+      epsContainer.appendChild(buildShowSection(show));
     }
     if (epsMeta && data.fetched_at) {
       const ts = new Date(data.fetched_at * 1000).toLocaleString("sv-SE");
       epsMeta.textContent = `hämtad ${ts}`;
     }
-    setRunning(busy);  // se till att nya knappar fattar nuvarande state
+    setRunning(busy);
+  }
+
+  function buildShowSection(show) {
+    const sec = document.createElement("div");
+    sec.className = "show-section";
+    sec.dataset.show = show.name;
+
+    const h = document.createElement("h3");
+    h.textContent = `${show.name}  (${show.episodes.length} avsnitt)`;
+    sec.appendChild(h);
+
+    const grid = document.createElement("div");
+    grid.className = "episode-grid";
+    sec.appendChild(grid);
+    const nav = document.createElement("div");
+    nav.className = "pagination";
+    sec.appendChild(nav);
+
+    function renderPage() {
+      const total = show.episodes.length;
+      const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      const cur = Math.min(pageState[show.name] || 1, totalPages);
+      pageState[show.name] = cur;
+
+      grid.innerHTML = "";
+      const slice = show.episodes.slice((cur - 1) * PAGE_SIZE, cur * PAGE_SIZE);
+      for (const ep of slice) grid.appendChild(buildCard(show.name, ep));
+
+      nav.innerHTML = "";
+      if (totalPages > 1) {
+        nav.appendChild(pageBtn("‹", cur > 1, () => goPage(cur - 1)));
+        for (let i = 1; i <= totalPages; i++) {
+          const b = pageBtn(String(i), i !== cur, () => goPage(i));
+          if (i === cur) b.classList.add("active");
+          nav.appendChild(b);
+        }
+        nav.appendChild(pageBtn("›", cur < totalPages, () => goPage(cur + 1)));
+      }
+      setRunning(busy);
+    }
+    function goPage(p) { pageState[show.name] = p; renderPage(); }
+    function pageBtn(text, enabled, onClick) {
+      const b = document.createElement("button");
+      b.className = "page-btn";
+      b.textContent = text;
+      b.disabled = !enabled;
+      b.onclick = onClick;
+      return b;
+    }
+    renderPage();
+
+    if (show.bonus && show.bonus.length) {
+      const bh = document.createElement("h4");
+      bh.className = "bonus-header";
+      bh.textContent = `Bonus / specialavsnitt (${show.bonus.length})`;
+      sec.appendChild(bh);
+      const bonusGrid = document.createElement("div");
+      bonusGrid.className = "episode-grid";
+      for (const ep of show.bonus) bonusGrid.appendChild(buildCard(show.name, ep));
+      sec.appendChild(bonusGrid);
+    }
+    return sec;
   }
 
   function formatDate(yyyymmdd) {
@@ -228,6 +284,15 @@
     row.appendChild(badge);
     if (st === "disabled") return row;
 
+    if (ep.is_bonus) {
+      // Bonus-avsnitt har ingen YouTube-källa - bara radera-knapp finns.
+      if (st === "imported") {
+        row.appendChild(actionBtn("Radera",
+          () => doDeleteBonus(ep, showName, kind), "danger"));
+      }
+      return row;
+    }
+
     if (st === "missing" || st === "archived_no_file") {
       row.appendChild(actionBtn("Importera", () =>
         doReimport(ep.id, showName, kind)));
@@ -244,6 +309,12 @@
       }
     }
     return row;
+  }
+
+  async function doDeleteBonus(ep, show, track) {
+    const title = ep.title || ep.id;
+    if (!confirm(`Radera ${title} (${track})?`)) return;
+    await doDelete(ep.id, show, track, /*keepArchive=*/false);
   }
 
   function actionBtn(text, onClick, extraClass, title) {

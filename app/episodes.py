@@ -13,7 +13,7 @@ from pathlib import Path
 
 from app.archive import read_ids
 from app.config import settings
-from downloader import naming
+from downloader import episode_index, naming
 from downloader.config import load_config
 
 log = logging.getLogger(__name__)
@@ -57,19 +57,38 @@ class EpisodesService:
                 playlist = []
             playlist_ids = {p["id"] for p in playlist}
 
+            local_meta = episode_index.load(show.name)
+            local_by_yt = {m["yt_id"]: m for m in local_meta if m.get("yt_id")}
+
             episodes = []
             for p_ep in playlist:
                 vid = p_ep["id"]
                 episodes.append(self._make(show, vid, p_ep,
                                            vid in audio_ids, vid in video_ids,
-                                           in_playlist=True, defaults=defaults))
+                                           in_playlist=True, defaults=defaults,
+                                           local=local_by_yt.get(vid)))
             extras = sorted((audio_ids | video_ids) - playlist_ids)
             for vid in extras:
-                episodes.append(self._make(show, vid,
-                                           {"id": vid, "title": None},
+                local = local_by_yt.get(vid)
+                # Anvand lokal metadata om finns sa arkivposter behaller titel/datum
+                ep_data = {"id": vid, "title": None}
+                if local:
+                    ep_data.update({
+                        "title": local.get("title"),
+                        "thumbnail": local.get("thumbnail_url"),
+                        "duration": local.get("duration"),
+                        "upload_date": local.get("upload_date"),
+                    })
+                episodes.append(self._make(show, vid, ep_data,
                                            vid in audio_ids, vid in video_ids,
-                                           in_playlist=False, defaults=defaults))
-            shows_out.append({"name": show.name, "episodes": episodes})
+                                           in_playlist=False, defaults=defaults,
+                                           local=local))
+            # Bonus: lokal metadata utan yt_id (RSS-/lokal-import).
+            bonus = [self._make_bonus(show, m)
+                     for m in local_meta if not m.get("yt_id")]
+            shows_out.append({"name": show.name,
+                              "episodes": episodes,
+                              "bonus": bonus})
         return {"shows": shows_out, "fetched_at": time.time()}
 
     async def _fetch_playlist(self, playlist_id):
@@ -105,7 +124,8 @@ class EpisodesService:
             })
         return out
 
-    def _make(self, show, vid, ep_data, in_audio, in_video, in_playlist, defaults):
+    def _make(self, show, vid, ep_data, in_audio, in_video, in_playlist,
+              defaults, local=None):
         upload_date = ep_data.get("upload_date")
         return {
             "id": vid,
@@ -119,6 +139,32 @@ class EpisodesService:
             "video": self._video_status(show, vid, in_video),
             "predicted": self._predict_filenames(show, vid, ep_data.get("title"),
                                                   upload_date, defaults),
+        }
+
+    def _make_bonus(self, show, meta):
+        """Avsnitt fran lokal metadata utan YouTube-id (RSS- eller lokal-import)."""
+        has_audio = bool(meta.get("audio_path"))
+        has_video = bool(meta.get("video_path"))
+
+        def st(track, present):
+            if track is None or not track.enabled:
+                return {"status": "disabled"}
+            return {"status": "imported" if present else "missing",
+                    "path": (meta.get("audio_path") if present and track is show.audio
+                             else (meta.get("video_path") if present else None))}
+
+        return {
+            "id": meta["id"],
+            "title": meta.get("title"),
+            "thumbnail": meta.get("thumbnail_url"),
+            "duration": meta.get("duration"),
+            "upload_date": meta.get("upload_date"),
+            "in_playlist": False,
+            "is_bonus": True,
+            "source": meta.get("source"),
+            "audio": st(show.audio, has_audio),
+            "video": st(show.video, has_video),
+            "predicted": {},
         }
 
     def _predict_filenames(self, show, vid, title, upload_date, defaults):

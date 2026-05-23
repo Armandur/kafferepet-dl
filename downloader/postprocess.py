@@ -18,7 +18,7 @@ import os
 import shutil
 from pathlib import Path
 
-from downloader import naming, tagging
+from downloader import episode_index, naming, tagging
 
 log = logging.getLogger(__name__)
 
@@ -102,6 +102,19 @@ def _process_one(info_path, media_path, show, track, defaults, summary):
     info_path.unlink(missing_ok=True)
     log.info("Skapad: %s", target)
     summary.add_created(show.name, track.kind, str(target))
+
+    # Lagra lokal metadata sa webUI:n ser avsnittet aven om YouTube raderar det.
+    episode_index.save_episode(
+        show.name,
+        yt_id=info.get("id"),
+        title=info.get("title"),
+        upload_date=info.get("upload_date"),
+        duration=info.get("duration"),
+        thumbnail_url=info.get("thumbnail"),
+        source="youtube",
+        audio_path=str(target) if track.kind == "audio" else None,
+        video_path=str(target) if track.kind == "video" else None,
+    )
 
 
 def _safe_move(src, dst):

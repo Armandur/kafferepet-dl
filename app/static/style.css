@@ -205,3 +205,31 @@ dialog .dialog-actions button small {
 dialog .dialog-actions button.dialog-cancel {
   background: #2a2d33; border-color: #2a2d33;
 }
+
+/* Paginering */
+.pagination {
+  display: flex; gap: .25rem; margin-top: 1rem;
+  flex-wrap: wrap; align-items: center;
+}
+.page-btn {
+  min-width: 2rem;
+  padding: .25rem .55rem;
+  background: #2a2d33;
+  border: 1px solid var(--border);
+  font-size: .8rem;
+}
+.page-btn.active {
+  background: var(--btn);
+  border-color: var(--btn);
+  font-weight: 600;
+}
+.page-btn:disabled { opacity: .35; }
+
+/* Bonus-sektion */
+.bonus-header {
+  margin: 1.5rem 0 .5rem;
+  font-size: .9rem;
+  color: var(--accent);
+  border-bottom: 1px dashed var(--border);
+  padding-bottom: .25rem;
+}
