@@ -129,10 +129,10 @@ def process_show(show, defaults, args, summary):
                                           defaults, summary)
             if kind == "audio":
                 failed = ytdlp.run_audio(show, track, info_dir, defaults,
-                                         args.playlist_items)
+                                         args.playlist_items, url=args.url)
             else:
                 failed = ytdlp.run_video(show, track, info_dir, defaults,
-                                         args.playlist_items)
+                                         args.playlist_items, url=args.url)
             postprocess.process_track_dir(info_dir, media_dir, show, track,
                                           defaults, summary)
             for vid in failed:
@@ -153,6 +153,9 @@ def main():
                         help="kor bara detta spar")
     parser.add_argument("--playlist-items",
                         help="yt-dlp --playlist-items, t.ex. '1' eller '1-3'")
+    parser.add_argument("--url",
+                        help="overrida konfigurerad spellista (enskild video "
+                             "eller annan spellista, kraver --show)")
     parser.add_argument("--dry-run", action="store_true",
                         help="testa titel-regex mot spellistorna, ladda inte ner")
     parser.add_argument("--once", action="store_true",

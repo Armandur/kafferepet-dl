@@ -26,8 +26,11 @@ def _common_args(defaults, archive, playlist_items):
     return args
 
 
-def run_audio(show, track, tmp_dir, defaults, playlist_items):
+def run_audio(show, track, tmp_dir, defaults, playlist_items, url=None):
     """Laddar ner ljud till tmp_dir med temporart id-namn. Returnerar fel-id.
+
+    url overridar konfigurerad spellista - anvands av webUI:s manuella import
+    av enskild YouTube-video eller annan spellista.
 
     Inget --no-overwrites: yt-dlp ska kunna ateruppta avbrutna .part-filer.
     Skyddet mot att skriva over befintliga filer ligger i post-proc-steget.
@@ -43,12 +46,14 @@ def run_audio(show, track, tmp_dir, defaults, playlist_items):
         "--output", "%(id)s.%(ext)s",
     ]
     args += _common_args(defaults, track.archive, playlist_items)
-    args.append(_PLAYLIST_URL.format(show.playlist_id))
+    args.append(url or _PLAYLIST_URL.format(show.playlist_id))
     return _run(args, f"{show.name}/audio")
 
 
-def run_video(show, track, info_dir, defaults, playlist_items):
+def run_video(show, track, info_dir, defaults, playlist_items, url=None):
     """Laddar ner video till track.output_dir med temporart id-namn.
+
+    url overridar konfigurerad spellista - anvands av webUI:s manuella import.
 
     Mediafilen gar direkt till Plex-arkivet (videor ar stora - undvik att
     mellanlagra dem i appdata). Bara .info.json routas till info_dir utanfor
@@ -66,7 +71,7 @@ def run_video(show, track, info_dir, defaults, playlist_items):
         "--output", "%(id)s.%(ext)s",
     ]
     args += _common_args(defaults, track.archive, playlist_items)
-    args.append(_PLAYLIST_URL.format(show.playlist_id))
+    args.append(url or _PLAYLIST_URL.format(show.playlist_id))
     return _run(args, f"{show.name}/video")
 
 

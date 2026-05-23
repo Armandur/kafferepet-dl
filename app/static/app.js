@@ -1,12 +1,14 @@
-// kafferepet-dl webUI - SSE-anslutning + kor-nu-form.
+// kafferepet-dl webUI - SSE + kor-nu + manuell import.
 (() => {
   const log = document.getElementById("log");
-  const form = document.getElementById("run-form");
-  const btn = document.getElementById("run-btn");
-  const status = document.getElementById("status");
-  const clearBtn = document.getElementById("clear-btn");
+  if (!log) return;  // ingen logg-yta pa sidan
+
   const autoscroll = document.getElementById("autoscroll");
-  if (!log) return;  // ej pa dashboard-sidan
+  const clearBtn = document.getElementById("clear-btn");
+  const runForm = document.getElementById("run-form");
+  const runBtn = document.getElementById("run-btn");
+  const runStatus = document.getElementById("status");
+  const importForms = document.querySelectorAll("form[data-import]");
 
   function append(text, cls) {
     const el = document.createElement("span");
@@ -17,9 +19,12 @@
   }
 
   function setRunning(running) {
-    btn.disabled = running;
-    status.textContent = running ? "körning pågår..." : "";
-    status.className = running ? "status running" : "status";
+    if (runBtn) runBtn.disabled = running;
+    importForms.forEach(f => f.querySelectorAll("button").forEach(b => b.disabled = running));
+    if (runStatus) {
+      runStatus.textContent = running ? "körning pågår..." : "";
+      runStatus.className = running ? "status running" : "status";
+    }
   }
 
   const es = new EventSource("/api/run/events");
@@ -27,7 +32,7 @@
     const msg = JSON.parse(e.data);
     if (msg.event === "log") append(msg.line);
     else if (msg.event === "start") {
-      append(`---- start: run.py ${msg.args.join(" ")} ----`, "start");
+      append(`---- start: ${msg.args.join(" ")} ----`, "start");
       setRunning(true);
     } else if (msg.event === "end") {
       append(`---- klar, exit ${msg.code} ----`, "end");
@@ -38,30 +43,50 @@
     }
   };
   es.onerror = () => {
-    // EventSource forsoker reconnecta sjalv; visa bara mjukt status
-    status.textContent = "SSE frånkopplad, försöker återansluta...";
-    status.className = "status error";
+    if (runStatus) {
+      runStatus.textContent = "SSE frånkopplad, försöker återansluta...";
+      runStatus.className = "status error";
+    }
   };
 
-  // initial status
   fetch("/api/run/status").then(r => r.json()).then(s => setRunning(s.running));
 
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const data = Object.fromEntries(new FormData(form));
-    data.dry_run = form.dry_run.checked;
+  async function postJson(url, payload, defaultMsg) {
     setRunning(true);
-    const r = await fetch("/api/run", {
+    const r = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
+      body: JSON.stringify(payload),
     });
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
-      append(`FEL: ${j.error || r.statusText}`, "err");
+      append(`FEL: ${j.error || defaultMsg || r.statusText}`, "err");
       setRunning(false);
     }
+  }
+
+  if (runForm) {
+    runForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(runForm));
+      data.dry_run = runForm.dry_run.checked;
+      postJson("/api/run", data, "kunde inte starta");
+    });
+  }
+
+  const endpoints = {
+    youtube: "/api/import/youtube",
+    rss: "/api/import/rss",
+    local: "/api/import/local",
+  };
+  importForms.forEach((form) => {
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const kind = form.dataset.import;
+      const payload = Object.fromEntries(new FormData(form));
+      postJson(endpoints[kind], payload, "import misslyckades");
+    });
   });
 
-  clearBtn.addEventListener("click", () => { log.textContent = ""; });
+  if (clearBtn) clearBtn.addEventListener("click", () => { log.textContent = ""; });
 })();

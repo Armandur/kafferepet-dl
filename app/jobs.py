@@ -1,7 +1,7 @@
-"""Korning av jobb fran webUI: SSE-broadcast + lock + subprocess.
+"""Jobbkorning: SSE-broadcast + en koordinator som korar en uppgift i taget.
 
-En Broadcaster med tail-historik ger nya SSE-klienter de senaste raderna sa
-man inte missar starten av ett jobb om man oppnar fliken efter att man startat.
+Runner accepterar valfri coroutine (inte bara subprocess), sa run.py-jobb och
+importflodena delar samma "kor-en-i-taget"-skydd och samma logg-strom.
 """
 import asyncio
 import logging
@@ -22,7 +22,6 @@ class Broadcaster:
 
     async def subscribe(self):
         q: asyncio.Queue = asyncio.Queue()
-        # Spela upp historik forst sa en ny klient ser pagaende kornings logg.
         for msg in list(self.history):
             await q.put(msg)
         self.subscribers.add(q)
@@ -38,12 +37,11 @@ class Broadcaster:
 
 
 class Runner:
-    """Triggar run.py som asyncio-subprocess och strommar logg via broadcaster.
+    """Kor en async-uppgift i taget. Hindrar parallella webUI-utlosta jobb.
 
-    Hindrar parallella webUI-utlosta korningar via intern task-handle. Skyddet
-    galler an sa lange BARA mot webUI-parallellism; cron kan annu starta jobb
-    parallellt med ett manuellt - en flock-baserad inter-process lock kommer
-    senare.
+    OBS: skyddet galler an sa lange BARA webUI-intern parallellism. En cron-
+    korning som startas av cron-daemonen kan annu kollidera; flock-baserad
+    inter-process lock kommer i en senare commit.
     """
 
     def __init__(self, broadcaster: Broadcaster):
@@ -53,30 +51,36 @@ class Runner:
     def is_running(self) -> bool:
         return self.task is not None and not self.task.done()
 
-    async def start(self, args: list[str] | None = None) -> bool:
+    def submit(self, coro) -> bool:
         if self.is_running():
             return False
-        self.task = asyncio.create_task(self._run(args or []))
+        self.task = asyncio.create_task(coro)
         return True
 
-    async def _run(self, args: list[str]):
-        await self.broadcaster.publish({"event": "start", "args": args})
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                sys.executable, "run.py",
-                "--config", settings.config_path, *args,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                cwd=str(PROJECT_ROOT),
-            )
-            assert proc.stdout is not None
-            async for raw in proc.stdout:
-                await self.broadcaster.publish(
-                    {"event": "log", "line": raw.decode("utf-8", "replace").rstrip()}
-                )
-            code = await proc.wait()
-        except Exception as exc:
-            log.exception("Jobb-runner kraschade")
-            await self.broadcaster.publish({"event": "error", "message": str(exc)})
-            return
-        await self.broadcaster.publish({"event": "end", "code": code})
+
+async def _stream_subprocess(proc, broadcaster, prefix=""):
+    """Stromma stdout-rader fran en asyncio-subprocess till broadcaster."""
+    assert proc.stdout is not None
+    async for raw in proc.stdout:
+        line = raw.decode("utf-8", "replace").rstrip()
+        await broadcaster.publish({"event": "log", "line": f"{prefix}{line}"})
+    return await proc.wait()
+
+
+async def run_py_subprocess(args: list[str], broadcaster: Broadcaster):
+    """Coroutine som triggar `python run.py ...` och stromrar dess logg."""
+    await broadcaster.publish({"event": "start", "args": args})
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, "run.py",
+            "--config", settings.config_path, *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            cwd=str(PROJECT_ROOT),
+        )
+        code = await _stream_subprocess(proc, broadcaster)
+    except Exception as exc:
+        log.exception("run_py_subprocess kraschade")
+        await broadcaster.publish({"event": "error", "message": str(exc)})
+        return
+    await broadcaster.publish({"event": "end", "code": code})

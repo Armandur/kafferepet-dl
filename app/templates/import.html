@@ -1,8 +1,76 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="card">
-  <h2>Manuell import</h2>
-  <p>Stubbe -- backendflödena kommer i nästa commit. Här ska du kunna importera
-  enskilda YouTube-videor, andra spellistor, RSS/Acast-länkar och lokala filer.</p>
+  <h2>YouTube-URL</h2>
+  <p>Klistra in en URL till en enskild video <em>eller</em> en annan spellista.
+  Triggar samma flöde som det schemalagda jobbet -- arkivet (`<code>--download-archive</code>`)
+  uppdateras så avsnittet inte hämtas igen.</p>
+  <form data-import="youtube" class="grid">
+    <label>YouTube-URL
+      <input name="url" type="url" required
+             placeholder="https://www.youtube.com/watch?v=...">
+    </label>
+    <label>Podd
+      <select name="show" required>
+        {% for show in shows %}<option>{{ show.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Spår
+      <select name="track">
+        <option value="audio">Ljud</option>
+        <option value="video">Video</option>
+      </select>
+    </label>
+    <div class="actions"><button type="submit">Importera</button></div>
+  </form>
+</section>
+
+<section class="card">
+  <h2>RSS-enclosure (direkt mp3-länk)</h2>
+  <p>Klistra in en direkt-länk till en mp3 (t.ex. en Acast-enclosure).
+  Källfilen <strong>måste ha ID3-taggar</strong> (TIT2 + TDRC) -- titel,
+  datum och nummer härleds därifrån via poddens <code>title_regex</code>.</p>
+  <form data-import="rss" class="grid">
+    <label>MP3-URL
+      <input name="url" type="url" required
+             placeholder="https://sphinx.acast.com/.../media.mp3">
+    </label>
+    <label>Podd
+      <select name="show" required>
+        {% for show in shows %}<option>{{ show.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <div class="actions"><button type="submit">Importera</button></div>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Lokal filsökväg</h2>
+  <p>Sökväg till en mp3-fil som redan finns på Unraid (eller monterad i
+  containern). Filen kopieras till poddmappen och taggas enligt konventionen
+  -- originalet bevaras. Källan måste ha ID3-taggar (TIT2 + TDRC).</p>
+  <form data-import="local" class="grid">
+    <label>Filsökväg
+      <input name="path" required
+             placeholder="/state/import/foo.mp3">
+    </label>
+    <label>Podd
+      <select name="show" required>
+        {% for show in shows %}<option>{{ show.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <div class="actions"><button type="submit">Importera</button></div>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Live-logg</h2>
+  <div class="log-toolbar">
+    <button type="button" id="clear-btn">Rensa</button>
+    <label class="checkbox">
+      <input type="checkbox" id="autoscroll" checked> Auto-scroll
+    </label>
+  </div>
+  <pre id="log" aria-live="polite"></pre>
 </section>
 {% endblock %}
