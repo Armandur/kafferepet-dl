@@ -225,11 +225,35 @@
 
   const PAGE_SIZE = 24;
   const pageState = {};
+  const filterState = { term: "", status: "" };
+  let lastData = null;
+
+  function matchesFilter(ep) {
+    if (filterState.term) {
+      const hay = ((ep.title || "") + " " + (ep.id || "")).toLowerCase();
+      if (!hay.includes(filterState.term)) return false;
+    }
+    if (filterState.status) {
+      const wanted = filterState.status;
+      const hits = [ep.audio.status, ep.video.status].includes(wanted);
+      if (!hits) return false;
+    }
+    return true;
+  }
 
   function renderEpisodes(data) {
+    lastData = data;
     epsContainer.innerHTML = "";
     for (const show of data.shows) {
-      epsContainer.appendChild(buildShowSection(show));
+      const filtered = {
+        ...show,
+        episodes: show.episodes.filter(matchesFilter),
+        bonus: (show.bonus || []).filter(matchesFilter),
+        channel_extras: (show.channel_extras || []).filter(matchesFilter),
+      };
+      // nollstall paginering for showen vid filterandring
+      if (filterState.term || filterState.status) pageState[show.name] = 1;
+      epsContainer.appendChild(buildShowSection(filtered));
     }
     if (epsMeta && data.fetched_at) {
       const ts = new Date(data.fetched_at * 1000).toLocaleString("sv-SE");
@@ -238,13 +262,33 @@
     setRunning(busy);
   }
 
+  const searchInput = document.getElementById("ep-search");
+  const filterSelect = document.getElementById("ep-filter");
+  if (searchInput) {
+    searchInput.addEventListener("input", () => {
+      filterState.term = searchInput.value.toLowerCase().trim();
+      if (lastData) renderEpisodes(lastData);
+    });
+  }
+  if (filterSelect) {
+    filterSelect.addEventListener("change", () => {
+      filterState.status = filterSelect.value;
+      if (lastData) renderEpisodes(lastData);
+    });
+  }
+
   function buildShowSection(show) {
     const sec = document.createElement("div");
     sec.className = "show-section";
     sec.dataset.show = show.name;
 
     const h = document.createElement("h3");
-    h.textContent = `${show.name}  (${show.episodes.length} avsnitt)`;
+    const disk = show.disk || {};
+    const sizeParts = [];
+    if (disk.audio_bytes) sizeParts.push("ljud " + formatBytes(disk.audio_bytes));
+    if (disk.video_bytes) sizeParts.push("video " + formatBytes(disk.video_bytes));
+    const sizeStr = sizeParts.length ? "  ·  " + sizeParts.join(" + ") : "";
+    h.textContent = `${show.name}  (${show.episodes.length} avsnitt)${sizeStr}`;
     sec.appendChild(h);
 
     const grid = document.createElement("div");
@@ -320,6 +364,13 @@
     const m = Math.floor((seconds % 3600) / 60);
     if (h > 0) return `${h} t ${m} min`;
     return `${m} min`;
+  }
+  function formatBytes(n) {
+    if (!n) return null;
+    if (n < 1024) return n + " B";
+    if (n < 1024 ** 2) return (n / 1024).toFixed(1) + " kB";
+    if (n < 1024 ** 3) return (n / 1024 / 1024).toFixed(1) + " MB";
+    return (n / 1024 / 1024 / 1024).toFixed(2) + " GB";
   }
 
   function buildCard(showName, ep) {
@@ -404,13 +455,11 @@
     } else if (st === "imported") {
       row.appendChild(actionBtn("Återimport", () =>
         doReimport(ep.id, showName, kind)));
-      if (kind === "video") {
-        row.appendChild(actionBtn("Radera",
-          () => openDeleteDialog(ep, showName, kind), "danger"));
-      } else {
-        row.appendChild(actionBtn("Glöm arkiv",
-          () => doDelete(ep.id, showName, kind, false), "danger",
-          "Tar bort arkivposten. Ljudfilen lämnas (kan inte hittas via id)."));
+      row.appendChild(actionBtn("Radera",
+        () => openDeleteDialog(ep, showName, kind), "danger"));
+      if (kind === "audio" && ep.has_transcript) {
+        row.appendChild(actionBtn("Transcript",
+          () => openTranscript(ep, showName)));
       }
     }
     return row;
@@ -420,6 +469,22 @@
     const title = ep.title || ep.id;
     if (!confirm(`Radera ${title} (${track})?`)) return;
     await doDelete(ep.id, show, track, /*keepArchive=*/false);
+  }
+
+  async function openTranscript(ep, show) {
+    const dlg = document.getElementById("transcript-dialog");
+    if (!dlg) return;
+    document.getElementById("transcript-title").textContent = ep.title || ep.id;
+    document.getElementById("transcript-text").textContent = "Laddar...";
+    dlg.showModal();
+    try {
+      const r = await fetch(`/api/episodes/${ep.id}/transcript?show=${encodeURIComponent(show)}`);
+      const d = await r.json();
+      document.getElementById("transcript-text").textContent =
+        r.ok ? d.text : "FEL: " + (d.error || r.statusText);
+    } catch (e) {
+      document.getElementById("transcript-text").textContent = "FEL: " + e;
+    }
   }
 
   function actionBtn(text, onClick, extraClass, title) {
@@ -487,4 +552,72 @@
 
   if (refreshBtn) refreshBtn.addEventListener("click", () => loadEpisodes(true));
   if (epsContainer) loadEpisodes();
+
+  // ---- Körningshistorik ----
+  const runsList = document.getElementById("runs-list");
+  async function loadRuns() {
+    if (!runsList) return;
+    try {
+      const r = await fetch("/api/runs");
+      const data = await r.json();
+      renderRuns(data.runs || []);
+    } catch (e) {
+      runsList.innerHTML = `<p class="err">Kunde inte ladda: ${e}</p>`;
+    }
+  }
+  function renderRuns(runs) {
+    if (!runs.length) {
+      runsList.innerHTML = '<p class="muted">Inga körningar än.</p>';
+      return;
+    }
+    runsList.innerHTML = "";
+    for (const r of runs) {
+      const ts = r.started_at.replace("T", " ").replace("Z", "");
+      const det = document.createElement("details");
+      det.className = "run-row" + (r.exit_code === 0 ? "" : " run-failed");
+      const summ = document.createElement("summary");
+      const argsStr = Object.entries(r.args || {})
+        .filter(([k, v]) => v !== false && v !== null && v !== undefined && v !== "")
+        .map(([k, v]) => v === true ? `--${k}` : `--${k}=${v}`).join(" ");
+      summ.innerHTML = `<span class="run-time">${escapeHtml(ts)}</span>` +
+        ` <span class="badge status-${r.exit_code === 0 ? "imported" : "archived_no_file"}">exit ${r.exit_code}</span>` +
+        ` <span class="muted">${r.new_files} nya, ${r.errors + r.job_failures} fel</span>` +
+        (argsStr ? ` <span class="muted">${escapeHtml(argsStr)}</span>` : "");
+      det.appendChild(summ);
+      const body = document.createElement("div");
+      body.className = "run-detail muted";
+      body.textContent = "Laddar detaljer...";
+      det.appendChild(body);
+      det.addEventListener("toggle", async () => {
+        if (det.open && body.dataset.loaded !== "1") {
+          try {
+            const d = await fetch(`/api/runs/${encodeURIComponent(r.started_at)}`).then(x => x.json());
+            body.dataset.loaded = "1";
+            body.innerHTML = "";
+            if (d.created && d.created.length) {
+              const ul = document.createElement("ul");
+              for (const c of d.created) {
+                const li = document.createElement("li");
+                li.textContent = `${c.show}/${c.track}: ${c.path}`;
+                ul.appendChild(li);
+              }
+              body.appendChild(ul);
+            }
+            if (d.job_failures_list && d.job_failures_list.length) {
+              const p = document.createElement("p");
+              p.className = "err";
+              p.textContent = "Jobbfel: " + d.job_failures_list.map(x =>
+                `${x.show}/${x.track} (${x.message})`).join("; ");
+              body.appendChild(p);
+            }
+            if (!body.children.length) body.textContent = "(ingen detalj)";
+          } catch (e) {
+            body.innerHTML = `<p class="err">Kunde inte ladda: ${e}</p>`;
+          }
+        }
+      });
+      runsList.appendChild(det);
+    }
+  }
+  if (runsList) loadRuns();
 })();

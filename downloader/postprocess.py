@@ -15,10 +15,12 @@ import errno
 import json
 import logging
 import os
+import re
 import shutil
+import unicodedata
 from pathlib import Path
 
-from downloader import episode_index, naming, tagging
+from downloader import episode_index, naming, tagging, transcripts
 
 log = logging.getLogger(__name__)
 
@@ -103,6 +105,20 @@ def _process_one(info_path, media_path, show, track, defaults, summary):
     log.info("Skapad: %s", target)
     summary.add_created(show.name, track.kind, str(target))
 
+    # Hamta transcript fran YouTube (om finns) - bara for audio-importer.
+    transcript_path = None
+    if track.kind == "audio" and info.get("id"):
+        state_dir = Path(os.environ.get("STATE_DIR", "/state"))
+        tr_dir = state_dir / "transcripts" / _slug(show.name)
+        try:
+            sub_path = transcripts.fetch_subs(info["id"], tr_dir)
+        except Exception as exc:
+            log.warning("Transcript-hamtning misslyckades: %s", exc)
+            sub_path = None
+        if sub_path:
+            transcript_path = str(sub_path)
+            log.info("Transcript hamtat: %s", sub_path.name)
+
     # Lagra lokal metadata sa webUI:n ser avsnittet aven om YouTube raderar det.
     episode_index.save_episode(
         show.name,
@@ -114,7 +130,13 @@ def _process_one(info_path, media_path, show, track, defaults, summary):
         source="youtube",
         audio_path=str(target) if track.kind == "audio" else None,
         video_path=str(target) if track.kind == "video" else None,
+        transcript_path=transcript_path,
     )
+
+
+def _slug(name):
+    s = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    return re.sub(r'[^a-z0-9]+', '_', s.lower()).strip('_') or "show"
 
 
 def _safe_move(src, dst):

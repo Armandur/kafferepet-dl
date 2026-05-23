@@ -234,6 +234,45 @@ dialog .dialog-actions button.dialog-cancel {
   padding-bottom: .25rem;
 }
 
+/* Transcript-dialog */
+dialog#transcript-dialog {
+  background: var(--panel); color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1.25rem 1.5rem;
+  max-width: 640px; width: 90vw;
+  max-height: 80vh;
+}
+dialog#transcript-dialog::backdrop { background: rgba(0,0,0,.55); }
+dialog#transcript-dialog h3 { margin: 0 0 .25rem; color: var(--accent); }
+dialog#transcript-dialog pre {
+  background: #0e1013; padding: .65rem; border-radius: 4px;
+  font-size: .75rem; line-height: 1.5;
+  max-height: 55vh; overflow: auto;
+  margin: .75rem 0;
+  white-space: pre-wrap; word-break: break-word;
+  font-family: "JetBrains Mono", "SF Mono", Consolas, monospace;
+}
+
+/* Körningshistorik */
+.run-row {
+  margin: .25rem 0;
+  padding: .35rem .5rem;
+  background: #1a1d22;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: .8rem;
+}
+.run-row.run-failed { border-color: #6a2c2c; }
+.run-row summary { cursor: pointer; display: flex; gap: .5rem; flex-wrap: wrap;
+                    align-items: center; }
+.run-row .run-time { font-family: "JetBrains Mono", monospace; }
+.run-detail {
+  margin-top: .5rem; padding-left: 1rem;
+  font-size: .75rem;
+}
+.run-detail ul { margin: 0; padding-left: 1.2rem; }
+
 /* YouTube-URL preview-panel */
 .preview-panel {
   display: flex; gap: 1rem; margin-top: 1rem;

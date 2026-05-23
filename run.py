@@ -72,9 +72,63 @@ def _slug(name):
 
 
 def _notify(summary):
-    """Hook for notifiering (Home Assistant/ntfy). Loggar bara i v1.0."""
+    """Skicka notis till ntfy och/eller Home Assistant om konfigurerat.
+
+    Triggar bara nar nagot hant: nya filer eller fel. Tysta korningar (cron
+    som hittar inga nya avsnitt) genererar ingen notis.
+
+    Env-vars:
+      NTFY_URL          Full URL till en ntfy-topic (https://ntfy.sh/...)
+      HA_WEBHOOK_URL    Home Assistant webhook-URL (POST JSON)
+    """
+    import json
+    import urllib.request
+
+    n_new = len(summary.created)
+    n_err = len(summary.job_failures) + len(summary.errors)
     log.info("notify-hook: %d nya, %d avsnittsfel, %d jobbfel",
-             len(summary.created), len(summary.errors), len(summary.job_failures))
+             len(summary.created), len(summary.errors),
+             len(summary.job_failures))
+    if n_new == 0 and n_err == 0:
+        return
+
+    if n_err:
+        message = f"{n_err} fel i senaste körningen ({n_new} nya filer)"
+        priority = "high"
+        tags = "warning"
+    else:
+        message = f"{n_new} nya avsnitt hämtade"
+        priority = "default"
+        tags = "tada"
+
+    ntfy_url = os.environ.get("NTFY_URL", "").strip()
+    if ntfy_url:
+        try:
+            req = urllib.request.Request(
+                ntfy_url, data=message.encode("utf-8"), method="POST",
+                headers={"Title": "kafferepet-dl",
+                         "Priority": priority, "Tags": tags})
+            urllib.request.urlopen(req, timeout=5).read()
+            log.info("ntfy: skickade notis till %s", ntfy_url)
+        except Exception as exc:
+            log.warning("ntfy notify misslyckades: %s", exc)
+
+    ha_url = os.environ.get("HA_WEBHOOK_URL", "").strip()
+    if ha_url:
+        try:
+            payload = json.dumps({
+                "title": "kafferepet-dl", "message": message,
+                "new_files": n_new, "errors": n_err,
+                "created": [{"show": s, "track": t, "path": p}
+                            for s, t, p in summary.created],
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                ha_url, data=payload, method="POST",
+                headers={"Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=5).read()
+            log.info("HA webhook: skickade notis till %s", ha_url)
+        except Exception as exc:
+            log.warning("HA webhook notify misslyckades: %s", exc)
 
 
 def apply_retention(output_dir, days):
@@ -192,7 +246,43 @@ def main():
         exit_code = 0 if summary.ok else 1
     finally:
         lock.release()
+    _save_run_history(args, summary, exit_code)
     sys.exit(exit_code)
+
+
+def _save_run_history(args, summary, exit_code):
+    """Sparar en JSON per korning i /state/runs/, behaller 50 senaste."""
+    import json
+    runs_dir = Path(os.environ.get("STATE_DIR", "/state")) / "runs"
+    try:
+        runs_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        log.warning("Kunde inte skapa runs-mapp: %s", exc)
+        return
+    ts = time.strftime("%Y-%m-%dT%H-%M-%SZ", time.gmtime())
+    data = {
+        "started_at": ts,
+        "exit_code": exit_code,
+        "args": {k: v for k, v in vars(args).items() if v is not None},
+        "new_files": len(summary.created),
+        "errors": len(summary.errors),
+        "job_failures": len(summary.job_failures),
+        "skipped": summary.skipped,
+        "created": [{"show": s, "track": t, "path": p}
+                    for s, t, p in summary.created],
+        "errors_list": [{"show": s, "track": t, "video_id": v}
+                        for s, t, v in summary.errors],
+        "job_failures_list": [{"show": s, "track": t, "message": m}
+                              for s, t, m in summary.job_failures],
+    }
+    try:
+        (runs_dir / f"{ts}.json").write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        files = sorted(runs_dir.glob("*.json"))
+        for f in files[:-50]:
+            f.unlink(missing_ok=True)
+    except OSError as exc:
+        log.warning("Kunde inte skriva runs-historik: %s", exc)
 
 
 if __name__ == "__main__":

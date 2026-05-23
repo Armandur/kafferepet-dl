@@ -94,7 +94,8 @@ class EpisodesService:
             shows_out.append({"name": show.name,
                               "episodes": episodes,
                               "bonus": bonus,
-                              "channel_extras": channel_extras})
+                              "channel_extras": channel_extras,
+                              "disk": self._disk_usage(show)})
         return {"shows": shows_out, "fetched_at": time.time()}
 
     async def _fetch_channel_extras(self, show, defaults, exclude_ids):
@@ -209,10 +210,12 @@ class EpisodesService:
             "duration": ep_data.get("duration"),
             "upload_date": upload_date,
             "in_playlist": in_playlist,
-            "audio": self._audio_status(show, in_audio),
+            "audio": self._audio_status(show, in_audio, local),
             "video": self._video_status(show, vid, in_video),
             "predicted": self._predict_filenames(show, vid, ep_data.get("title"),
                                                   upload_date, defaults),
+            "has_transcript": bool(local and local.get("transcript_path")
+                                   and Path(local["transcript_path"]).is_file()),
         }
 
     def _make_bonus(self, show, meta):
@@ -262,10 +265,19 @@ class EpisodesService:
                 padding, missing_mode, suffix=vid)
         return out
 
-    def _audio_status(self, show, in_archive):
+    def _audio_status(self, show, in_archive, local=None):
         if show.audio is None or not show.audio.enabled:
             return {"status": "disabled"}
-        return {"status": "imported" if in_archive else "missing"}
+        if not in_archive:
+            return {"status": "missing"}
+        # I arkivet - kolla om filen finns via lokal metadata (audio_path).
+        if local and local.get("audio_path"):
+            if Path(local["audio_path"]).is_file():
+                return {"status": "imported", "path": local["audio_path"]}
+            return {"status": "archived_no_file"}
+        # I arkivet utan metadata-koppling: lita pa arkivet (kan inte
+        # verifiera fil utan id i namnet).
+        return {"status": "imported"}
 
     def _video_status(self, show, vid, in_archive):
         if show.video is None or not show.video.enabled:
@@ -278,6 +290,27 @@ class EpisodesService:
                 if f.is_file() and vid in f.name:
                     return {"status": "imported", "path": str(f)}
         return {"status": "archived_no_file"}
+
+
+    def _disk_usage(self, show):
+        return {
+            "audio_bytes": _dir_size(show.audio.output_dir) if show.audio and show.audio.enabled else 0,
+            "video_bytes": _dir_size(show.video.output_dir) if show.video and show.video.enabled else 0,
+        }
+
+
+def _dir_size(path) -> int:
+    p = Path(path)
+    if not p.is_dir():
+        return 0
+    total = 0
+    for f in p.rglob("*"):
+        try:
+            if f.is_file():
+                total += f.stat().st_size
+        except OSError:
+            continue
+    return total
 
 
 def find_video_file(show, video_id) -> Path | None:

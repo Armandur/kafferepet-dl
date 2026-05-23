@@ -43,6 +43,61 @@ def shows():
                       for s in cfg.shows]}
 
 
+@router.get("/episodes/{ep_id}/transcript")
+def get_transcript(ep_id: str, show: str):
+    meta = episode_index.find(show, ep_id)
+    if not meta or not meta.get("transcript_path"):
+        return JSONResponse({"ok": False, "error": "Inget transcript"}, status_code=404)
+    path = Path(meta["transcript_path"])
+    if not path.is_file():
+        return JSONResponse({"ok": False, "error": "Transcript-fil saknas"}, status_code=404)
+    return {"ok": True, "text": path.read_text(encoding="utf-8")}
+
+
+@router.get("/runs")
+def list_runs():
+    """Senaste korningarnas sammanfattningar."""
+    import json
+    runs_dir = settings.state_dir / "runs"
+    if not runs_dir.is_dir():
+        return {"runs": []}
+    files = sorted(runs_dir.glob("*.json"), reverse=True)[:50]
+    out = []
+    for f in files:
+        try:
+            d = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        out.append({
+            "started_at": d.get("started_at"),
+            "exit_code": d.get("exit_code"),
+            "new_files": d.get("new_files", 0),
+            "errors": d.get("errors", 0),
+            "job_failures": d.get("job_failures", 0),
+            "args": d.get("args", {}),
+        })
+    return {"runs": out}
+
+
+@router.get("/runs/{ts}")
+def get_run(ts: str):
+    import json
+    runs_dir = settings.state_dir / "runs"
+    path = runs_dir / f"{ts}.json"
+    if not path.is_file():
+        return JSONResponse({"ok": False, "error": "not found"},
+                            status_code=404)
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+@router.get("/health")
+def health(request: Request):
+    """Simpel health-check for Docker HEALTHCHECK och Unraid-monitor."""
+    return {"ok": True,
+            "running": request.app.state.runner.is_running(),
+            "locked": is_held()}
+
+
 @router.get("/run/status")
 def run_status(request: Request):
     return {"running": request.app.state.runner.is_running(),
@@ -91,11 +146,18 @@ async def delete_episode(request: Request, ep_id: str):
                 file_deleted = True
             episode_index.set_path(show_name, ep_id, track_kind, None)
         else:
-            # YouTube-id: anvand arkiv + filnamnssokning for video.
+            # YouTube-id: anvand arkiv + filsokning.
             if track_kind == "video":
                 f = find_video_file(show, ep_id)
                 if f is not None:
                     f.unlink()
+                    file_deleted = True
+            else:
+                # Audio: filnamnet saknar id; ta filsokvagen ur metadata-katalogen.
+                meta_pre = episode_index.find(show_name, ep_id)
+                ap = meta_pre.get("audio_path") if meta_pre else None
+                if ap and Path(ap).is_file():
+                    Path(ap).unlink()
                     file_deleted = True
             if not keep_archive:
                 archive_deleted = remove_id(track.archive, ep_id)

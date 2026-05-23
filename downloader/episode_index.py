@@ -42,7 +42,7 @@ def load(show_name) -> list[dict]:
 
 def save_episode(show_name, *, yt_id=None, title=None, upload_date=None,
                  duration=None, thumbnail_url=None, source="unknown",
-                 audio_path=None, video_path=None):
+                 audio_path=None, video_path=None, transcript_path=None):
     """Lagger till eller uppdaterar en post. Idempotent per id."""
     eps = load(show_name)
     ep_id = yt_id or _hash_id(title, upload_date)
@@ -55,10 +55,10 @@ def save_episode(show_name, *, yt_id=None, title=None, upload_date=None,
             "upload_date": upload_date, "duration": duration,
             "thumbnail_url": thumbnail_url, "source": source,
             "audio_path": audio_path, "video_path": video_path,
+            "transcript_path": transcript_path,
             "imported_at": now,
         })
     else:
-        # uppdatera fält där vi har nya värden; bevara existerande annars
         for k, v in (("title", title), ("upload_date", upload_date),
                      ("duration", duration), ("thumbnail_url", thumbnail_url),
                      ("source", source)):
@@ -68,6 +68,8 @@ def save_episode(show_name, *, yt_id=None, title=None, upload_date=None,
             existing["audio_path"] = audio_path
         if video_path is not None:
             existing["video_path"] = video_path
+        if transcript_path is not None:
+            existing["transcript_path"] = transcript_path
         existing["imported_at"] = now
 
     _write(show_name, eps)

@@ -21,4 +21,8 @@ ENV TZ=Europe/Stockholm \
 
 EXPOSE 8000
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD python -c "import os,urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"WEBUI_PORT\",\"8000\")}/api/health', timeout=3).read()" \
+    || exit 1
+
 ENTRYPOINT ["/app/entrypoint.sh"]

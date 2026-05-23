@@ -36,12 +36,24 @@
 <section class="card">
   <h2>Avsnitt</h2>
   <div class="card-toolbar">
+    <input id="ep-search" type="search" placeholder="Sök på titel...">
+    <select id="ep-filter">
+      <option value="">Alla statusar</option>
+      <option value="imported">Importerade</option>
+      <option value="missing">Saknade</option>
+      <option value="archived_no_file">Fil saknas</option>
+    </select>
     <button type="button" id="refresh-episodes">Uppdatera</button>
     <span id="episodes-meta" class="muted"></span>
   </div>
   <div id="episodes-container">
     <p class="muted">Laddar...</p>
   </div>
+</section>
+
+<section class="card">
+  <h2>Körningshistorik</h2>
+  <div id="runs-list"><p class="muted">Laddar...</p></div>
 </section>
 
 <section class="card">
@@ -54,6 +66,15 @@
   </div>
   <pre id="log" aria-live="polite"></pre>
 </section>
+
+<dialog id="transcript-dialog">
+  <h3>Transcript</h3>
+  <p class="muted" id="transcript-title"></p>
+  <pre id="transcript-text"></pre>
+  <form method="dialog" class="dialog-actions">
+    <button value="close" class="dialog-cancel">Stäng</button>
+  </form>
+</dialog>
 
 <dialog id="delete-dialog">
   <h3>Radera avsnitt</h3>
