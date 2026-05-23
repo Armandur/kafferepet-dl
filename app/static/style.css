@@ -233,3 +233,50 @@ dialog .dialog-actions button.dialog-cancel {
   border-bottom: 1px dashed var(--border);
   padding-bottom: .25rem;
 }
+
+/* YouTube-URL preview-panel */
+.preview-panel {
+  display: flex; gap: 1rem; margin-top: 1rem;
+  background: #1a1d22; border: 1px solid var(--border);
+  border-radius: 6px; padding: 1rem;
+}
+.preview-panel img {
+  width: 280px; aspect-ratio: 16/9; object-fit: cover;
+  background: #0e1013;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.preview-body { flex: 1; min-width: 0; }
+.preview-body h3 { margin: 0 0 .25rem; font-size: 1rem; }
+.preview-body h4 { margin: 1rem 0 .5rem; font-size: .9rem; color: var(--accent); }
+.preview-body details { margin: .5rem 0; font-size: .8rem; }
+.preview-body details summary { cursor: pointer; color: var(--muted); }
+.preview-desc {
+  background: #0e1013; padding: .65rem; border-radius: 4px;
+  font-size: .75rem; line-height: 1.4;
+  max-height: 200px; overflow: auto;
+  margin: .5rem 0 0;
+  white-space: pre-wrap; word-break: break-word;
+}
+table.suggestions {
+  width: 100%; border-collapse: collapse;
+  font-size: .8rem;
+}
+table.suggestions td {
+  padding: .35rem .5rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+table.suggestions tr:last-child td { border-bottom: none; }
+table.suggestions td.filename {
+  width: 100%;
+  font-family: "JetBrains Mono", "SF Mono", Consolas, monospace;
+  font-size: .72rem;
+  color: var(--muted);
+}
+table.suggestions td.filename code { background: transparent; }
+.warning { color: var(--warn); margin-right: .25rem; }
+@media (max-width: 700px) {
+  .preview-panel { flex-direction: column; }
+  .preview-panel img { width: 100%; }
+}

@@ -102,6 +102,101 @@
 
   if (clearBtn) clearBtn.addEventListener("click", () => { log.textContent = ""; });
 
+  // ---- YouTube-URL preview / review-flow ----
+  const previewForm = document.getElementById("preview-form");
+  const previewResult = document.getElementById("preview-result");
+  if (previewForm) {
+    previewForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const url = document.getElementById("preview-url").value.trim();
+      if (!url) return;
+      previewResult.innerHTML = '<p class="muted">Hämtar metadata...</p>';
+      try {
+        const r = await fetch("/api/import/preview?url=" + encodeURIComponent(url));
+        const data = await r.json();
+        if (!data.ok) {
+          previewResult.innerHTML = `<p class="err">FEL: ${escapeHtml(data.error || r.statusText)}</p>`;
+          return;
+        }
+        renderPreview(url, data);
+      } catch (exc) {
+        previewResult.innerHTML = `<p class="err">FEL: ${escapeHtml(exc)}</p>`;
+      }
+    });
+  }
+
+  function renderPreview(url, data) {
+    const date = formatDate(data.upload_date) || "okänt datum";
+    const dur = formatDuration(data.duration) || "?";
+    const wrap = document.createElement("div");
+    wrap.className = "preview-panel";
+
+    const img = document.createElement("img");
+    img.src = data.thumbnail || "";
+    img.loading = "lazy";
+    img.onerror = () => { img.style.opacity = ".3"; };
+    wrap.appendChild(img);
+
+    const body = document.createElement("div");
+    body.className = "preview-body";
+    const h = document.createElement("h3");
+    h.textContent = data.title || data.id || "(okänd titel)";
+    body.appendChild(h);
+    const meta = document.createElement("p");
+    meta.className = "muted";
+    meta.textContent = `${date} · ${dur}`;
+    body.appendChild(meta);
+    if (data.description) {
+      const det = document.createElement("details");
+      const summ = document.createElement("summary");
+      summ.textContent = "Beskrivning";
+      det.appendChild(summ);
+      const pre = document.createElement("pre");
+      pre.className = "preview-desc";
+      pre.textContent = data.description;
+      det.appendChild(pre);
+      body.appendChild(det);
+    }
+    const subh = document.createElement("h4");
+    subh.textContent = "Importera till:";
+    body.appendChild(subh);
+
+    const table = document.createElement("table");
+    table.className = "suggestions";
+    for (const s of data.suggestions) {
+      const tr = document.createElement("tr");
+      const tdShow = document.createElement("td");
+      tdShow.textContent = s.show;
+      const tdTrack = document.createElement("td");
+      tdTrack.textContent = s.track;
+      const tdFn = document.createElement("td");
+      tdFn.className = "filename";
+      if (!s.matched_regex) {
+        const w = document.createElement("span");
+        w.className = "warning";
+        w.title = "Titeln matchar inte poddens regex - blir nummerlös";
+        w.textContent = "⚠ ";
+        tdFn.appendChild(w);
+      }
+      const fn = document.createElement("code");
+      fn.textContent = s.predicted_filename;
+      tdFn.appendChild(fn);
+      const tdBtn = document.createElement("td");
+      const btn = document.createElement("button");
+      btn.textContent = "Importera";
+      btn.disabled = busy;
+      btn.onclick = () => postJson("/api/import/youtube",
+        { url, show: s.show, track: s.track }, "import misslyckades");
+      tdBtn.appendChild(btn);
+      tr.append(tdShow, tdTrack, tdFn, tdBtn);
+      table.appendChild(tr);
+    }
+    body.appendChild(table);
+    wrap.appendChild(body);
+    previewResult.innerHTML = "";
+    previewResult.appendChild(wrap);
+  }
+
   // ---- avsnittslista ----
   const epsContainer = document.getElementById("episodes-container");
   const epsMeta = document.getElementById("episodes-meta");

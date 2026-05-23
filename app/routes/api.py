@@ -197,6 +197,64 @@ async def trigger_run(request: Request):
     return _submit(runner, jobs.run_py_subprocess(args, runner.broadcaster))
 
 
+@router.get("/import/preview")
+async def import_preview(url: str):
+    """Hamtar YouTube-metadata och bygger forslag for varje (podd, spar)-kombo."""
+    import asyncio
+    import json as _json
+    import os as _os
+    from downloader import naming
+    ytdlp = _os.environ.get("YTDLP_BIN", "yt-dlp")
+    proc = await asyncio.create_subprocess_exec(
+        ytdlp, "--dump-json", "--skip-download", "--no-warnings", url,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate()
+    if proc.returncode != 0 or not stdout.strip():
+        msg = stderr.decode("utf-8", "replace")[:200] or "okand fel"
+        return JSONResponse({"ok": False, "error": msg}, status_code=400)
+    try:
+        meta = _json.loads(stdout.decode("utf-8", "replace").splitlines()[0])
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    cfg = load_config(settings.config_path)
+    defaults = cfg.defaults
+    suggestions = []
+    for show in cfg.shows:
+        for kind in ("audio", "video"):
+            track = getattr(show, kind)
+            if track is None or not track.enabled:
+                continue
+            num_raw, clean_title = naming.parse_title(meta.get("title", ""),
+                                                      show.title_regex)
+            padding = defaults.get("number_padding", 4)
+            missing_mode = defaults.get("on_missing_number", "omit")
+            date = meta.get("upload_date") or "00000000"
+            ext = (defaults.get("audio_format", "m4a") if kind == "audio"
+                   else defaults.get("video_container", "mp4"))
+            suffix = meta.get("id") if kind == "video" else None
+            filename = naming.build_filename(date, num_raw, clean_title, ext,
+                                             padding, missing_mode, suffix=suffix)
+            suggestions.append({
+                "show": show.name,
+                "track": kind,
+                "predicted_filename": filename,
+                "matched_regex": num_raw is not None,
+                "output_dir": track.output_dir,
+            })
+    return {
+        "ok": True,
+        "id": meta.get("id"),
+        "title": meta.get("title"),
+        "upload_date": meta.get("upload_date"),
+        "duration": meta.get("duration"),
+        "thumbnail": meta.get("thumbnail"),
+        "description": (meta.get("description") or "")[:500],
+        "suggestions": suggestions,
+    }
+
+
 @router.post("/import/youtube")
 async def import_youtube(request: Request):
     runner = request.app.state.runner

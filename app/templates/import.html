@@ -1,28 +1,21 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="card">
-  <h2>YouTube-URL</h2>
-  <p>Klistra in en URL till en enskild video <em>eller</em> en annan spellista.
-  Triggar samma flöde som det schemalagda jobbet -- arkivet (`<code>--download-archive</code>`)
-  uppdateras så avsnittet inte hämtas igen.</p>
-  <form data-import="youtube" class="grid">
+  <h2>Importera annan YouTube-video</h2>
+  <p>För videor som <strong>inte</strong> finns i någon av poddens YouTube-spellistor.
+  Spellistans avsnitt importeras direkt från översiktssidan -- där behöver du
+  inte klistra in en URL.</p>
+  <p class="muted">Klistra in URL och tryck Granska. Du får se metadata och
+  förslag på filnamn per (podd, spår)-kombo, och kan välja exakt vilken
+  kombination du vill importera till.</p>
+  <form id="preview-form" class="grid">
     <label>YouTube-URL
-      <input name="url" type="url" required
+      <input name="url" type="url" required id="preview-url"
              placeholder="https://www.youtube.com/watch?v=...">
     </label>
-    <label>Podd
-      <select name="show" required>
-        {% for show in shows %}<option>{{ show.name }}</option>{% endfor %}
-      </select>
-    </label>
-    <label>Spår
-      <select name="track">
-        <option value="audio">Ljud</option>
-        <option value="video">Video</option>
-      </select>
-    </label>
-    <div class="actions"><button type="submit">Importera</button></div>
+    <div class="actions"><button type="submit">Granska</button></div>
   </form>
+  <div id="preview-result"></div>
 </section>
 
 <section class="card">
