@@ -11,10 +11,14 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY downloader/ ./downloader/
+COPY app/ ./app/
 COPY run.py entrypoint.sh ./
 RUN chmod +x entrypoint.sh
 
 ENV TZ=Europe/Stockholm \
-    CONFIG_PATH=/state/config.yaml
+    CONFIG_PATH=/state/config.yaml \
+    WEBUI_PORT=8000
+
+EXPOSE 8000
 
 ENTRYPOINT ["/app/entrypoint.sh"]
