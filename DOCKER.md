@@ -60,6 +60,8 @@ De fyra utdatamapparna ska vara fyra **olika** host-mappar.
 | `CRON_ONLY` | `false` | `true` = kör cron-daemon utan webUI |
 | `RUN_ON_START` | `true` | `false` = hoppa initial körning vid start |
 | `SKIP_YTDLP_UPDATE` | `false` | `true` = hoppa `pip install -U yt-dlp` vid start |
+| `NTFY_URL` | -- | full URL till en ntfy-topic (notiser vid nya filer / fel) |
+| `HA_WEBHOOK_URL` | -- | Home Assistant webhook-URL (POST JSON, samma triggers) |
 
 **PUID/PGID 99:100** ger filägarskap `nobody:users` - Unraids standard, så Plex
 och poddspelaren kan läsa filerna. Behåll dessa värden på Unraid.

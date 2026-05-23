@@ -7,6 +7,20 @@
 - Persistent download-arkiv, idempotent körning (temp-mapp som kö).
 - Docker-deploy på Unraid med cron eller RUN_ONCE.
 
+## v1.2 (klart, feat-v1.2-branchen)
+
+- **Audio-radera med filspårning** via metadata-katalogens audio_path.
+- **Health-check** (`GET /api/health`) + Dockerfile HEALTHCHECK.
+- **Sökfält + statusfilter** i avsnittslistan (titel-sök, status: alla/
+  imported/missing/archived_no_file).
+- **Disk-användning per podd** visas i show-headern (ljud + video bytes).
+- **Notifieringar** vid nya filer / fel via NTFY_URL och/eller
+  HA_WEBHOOK_URL.
+- **Körningshistorik** -- senaste 50 körningar i `/state/runs/`, lista
+  + detaljer på dashboard.
+- **Audio-transcript** -- YouTube-undertexter hämtas vid post-proc,
+  visas i modal via knapp på imported audio.
+
 ## v1.1 (klart, feat-webui-branchen)
 
 - WebUI (FastAPI + Jinja2 + vanilla JS) som körs parallellt med cron.
