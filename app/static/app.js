@@ -457,9 +457,14 @@
         doReimport(ep.id, showName, kind)));
       row.appendChild(actionBtn("Radera",
         () => openDeleteDialog(ep, showName, kind), "danger"));
-      if (kind === "audio" && ep.has_transcript) {
-        row.appendChild(actionBtn("Transcript",
-          () => openTranscript(ep, showName)));
+      if (kind === "audio") {
+        if (ep.has_transcript) {
+          row.appendChild(actionBtn("Transcript",
+            () => openTranscript(ep, showName)));
+        } else {
+          row.appendChild(actionBtn("Hämta transcript",
+            () => fetchTranscriptNow(ep, showName)));
+        }
       }
     }
     return row;
@@ -473,18 +478,56 @@
 
   async function openTranscript(ep, show) {
     const dlg = document.getElementById("transcript-dialog");
-    if (!dlg) return;
+    const target = document.getElementById("transcript-text");
+    if (!dlg || !target) return;
     document.getElementById("transcript-title").textContent = ep.title || ep.id;
-    document.getElementById("transcript-text").textContent = "Laddar...";
+    target.textContent = "Laddar...";
     dlg.showModal();
     try {
       const r = await fetch(`/api/episodes/${ep.id}/transcript?show=${encodeURIComponent(show)}`);
       const d = await r.json();
-      document.getElementById("transcript-text").textContent =
-        r.ok ? d.text : "FEL: " + (d.error || r.statusText);
+      if (!r.ok) {
+        target.textContent = "FEL: " + (d.error || r.statusText);
+        return;
+      }
+      target.innerHTML = "";
+      if (d.cues && d.cues.length) {
+        for (const cue of d.cues) {
+          const row = document.createElement("div");
+          row.className = "cue";
+          const ts = document.createElement("span");
+          ts.className = "cue-ts";
+          ts.textContent = cue.start.split(".")[0];  // hh:mm:ss utan ms
+          const tx = document.createElement("span");
+          tx.className = "cue-text";
+          tx.textContent = cue.text;
+          row.append(ts, tx);
+          target.appendChild(row);
+        }
+      } else {
+        // fallback: visa rå VTT
+        const pre = document.createElement("pre");
+        pre.textContent = d.raw || "(tomt)";
+        target.appendChild(pre);
+      }
     } catch (e) {
-      document.getElementById("transcript-text").textContent = "FEL: " + e;
+      target.textContent = "FEL: " + e;
     }
+  }
+
+  async function fetchTranscriptNow(ep, show) {
+    const r = await fetch(`/api/episodes/${ep.id}/fetch-transcript`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ show }),
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      append(`Transcript-hämtning misslyckades: ${d.error || r.statusText}`, "err");
+      return;
+    }
+    append(`Hämtade transcript: ${d.path}`, "start");
+    loadEpisodes(true);
   }
 
   function actionBtn(text, onClick, extraClass, title) {

@@ -1,5 +1,6 @@
 """JSON-endpoints: trigga jobb och import, avsnittslista, radera/reimport, SSE."""
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -51,7 +52,84 @@ def get_transcript(ep_id: str, show: str):
     path = Path(meta["transcript_path"])
     if not path.is_file():
         return JSONResponse({"ok": False, "error": "Transcript-fil saknas"}, status_code=404)
-    return {"ok": True, "text": path.read_text(encoding="utf-8")}
+    raw = path.read_text(encoding="utf-8")
+    return {"ok": True, "cues": _parse_vtt(raw), "raw": raw}
+
+
+@router.post("/episodes/{ep_id}/fetch-transcript")
+async def fetch_transcript_now(request: Request, ep_id: str):
+    """Hamta YouTube-undertexter for ett redan importerat avsnitt."""
+    import re as _re
+    import unicodedata as _ud
+    p = await request.json()
+    show_name = p.get("show")
+    if not show_name:
+        return JSONResponse({"ok": False, "error": "show kravs"}, status_code=400)
+    show = _find_show(show_name)
+    if show is None:
+        return JSONResponse({"ok": False, "error": "okand podd"}, status_code=404)
+    meta = episode_index.find(show_name, ep_id)
+    if not meta:
+        return JSONResponse({"ok": False, "error": "okand avsnitt"},
+                            status_code=404)
+    if not meta.get("yt_id"):
+        return JSONResponse({"ok": False,
+                             "error": "endast YouTube-avsnitt kan hamta undertexter"},
+                            status_code=400)
+
+    from downloader import transcripts as _transcripts
+    slug = _re.sub(r'[^a-z0-9]+', '_',
+                   _ud.normalize("NFKD", show_name).encode("ascii", "ignore")
+                   .decode().lower()).strip('_') or "show"
+    tr_dir = settings.state_dir / "transcripts" / slug
+
+    lock = Lock()
+    if not lock.acquire():
+        return JSONResponse({"ok": False, "error": "körning pågår, vänta"},
+                            status_code=409)
+    try:
+        sub_path = _transcripts.fetch_subs(meta["yt_id"], tr_dir)
+    finally:
+        lock.release()
+
+    if not sub_path:
+        return JSONResponse({"ok": False,
+                             "error": "Inga undertexter hittades på YouTube"},
+                            status_code=404)
+
+    episode_index.save_episode(show_name, yt_id=meta["yt_id"],
+                               transcript_path=str(sub_path))
+    request.app.state.episodes.invalidate()
+    return {"ok": True, "path": str(sub_path)}
+
+
+_VTT_TS = re.compile(r'(\d+:\d+(?::\d+)?\.\d+)\s*-->\s*(\d+:\d+(?::\d+)?\.\d+)')
+
+
+def _parse_vtt(text):
+    """Tunn VTT-parser: returnerar [{start, end, text}]. Tar bort YouTube-
+    auto-subs-taggar (<c.colorXXXX>...) och dubbletter (auto-subs sliding-window).
+    """
+    cues = []
+    seen_text = set()
+    for block in re.split(r'\n\s*\n', text.strip()):
+        lines = block.strip().splitlines()
+        ts_line = next((ln for ln in lines if _VTT_TS.search(ln)), None)
+        if ts_line is None:
+            continue
+        m = _VTT_TS.search(ts_line)
+        body = " ".join(ln for ln in lines if ln is not ts_line and ln != ts_line).strip()
+        # alt: body = bara raderna efter timestamp
+        idx = lines.index(ts_line)
+        body = " ".join(lines[idx + 1:]).strip()
+        # rensa tag-noise
+        body = re.sub(r'<[^>]+>', '', body)
+        body = re.sub(r'\s+', ' ', body).strip()
+        if not body or body in seen_text:
+            continue
+        seen_text.add(body)
+        cues.append({"start": m.group(1), "end": m.group(2), "text": body})
+    return cues
 
 
 @router.get("/runs")
