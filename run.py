@@ -15,6 +15,7 @@ from pathlib import Path
 
 from downloader import postprocess, ytdlp
 from downloader.config import load_config
+from downloader.lock import Lock
 from downloader.naming import parse_title
 
 log = logging.getLogger("kafferepet-dl")
@@ -172,16 +173,26 @@ def main():
         unmatched = run_dry(cfg, args.show)
         sys.exit(0 if unmatched == 0 else 1)
 
-    summary = Summary()
-    for show in cfg.shows:
-        if args.show and show.name != args.show:
-            continue
-        log.info("### Podd: %s ###", show.name)
-        process_show(show, cfg.defaults, args, summary)
+    # Inter-process lock sa cron och webUI inte tampas om arkiv/temp.
+    lock = Lock()
+    if not lock.acquire():
+        log.error("En annan körning pågår redan (lock-fil: %s). Avbryter.",
+                  lock.path)
+        sys.exit(2)
+    try:
+        summary = Summary()
+        for show in cfg.shows:
+            if args.show and show.name != args.show:
+                continue
+            log.info("### Podd: %s ###", show.name)
+            process_show(show, cfg.defaults, args, summary)
 
-    summary.log_report()
-    _notify(summary)
-    sys.exit(0 if summary.ok else 1)
+        summary.log_report()
+        _notify(summary)
+        exit_code = 0 if summary.ok else 1
+    finally:
+        lock.release()
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":
