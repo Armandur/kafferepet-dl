@@ -1,4 +1,5 @@
 """JSON-endpoints: trigga jobb och import, avsnittslista, radera/reimport, SSE."""
+import html as _html
 import json
 import re
 import sys
@@ -107,27 +108,39 @@ _VTT_TS = re.compile(r'(\d+:\d+(?::\d+)?\.\d+)\s*-->\s*(\d+:\d+(?::\d+)?\.\d+)')
 
 
 def _parse_vtt(text):
-    """Tunn VTT-parser: returnerar [{start, end, text}]. Tar bort YouTube-
-    auto-subs-taggar (<c.colorXXXX>...) och dubbletter (auto-subs sliding-window).
+    """VTT-parser anpassad för YouTubes auto-subs sliding-window-format.
+
+    YouTube genererar två-raders cues där föregående cues text upprepas på
+    rad 1 och ny text kommer på rad 2 -- plus en 10 ms "dummy"-cue mellan
+    varje par som bara håller den gamla texten. Strategin är att ta sista
+    icke-tomma raden i varje cue (= den nyaste texten) och deduplicera mot
+    redan sedd text. Manuella (icke-auto) subs har en text per cue och
+    fungerar lika bra med samma logik.
     """
     cues = []
-    seen_text = set()
+    seen = set()
     for block in re.split(r'\n\s*\n', text.strip()):
         lines = block.strip().splitlines()
         ts_line = next((ln for ln in lines if _VTT_TS.search(ln)), None)
         if ts_line is None:
             continue
         m = _VTT_TS.search(ts_line)
-        body = " ".join(ln for ln in lines if ln is not ts_line and ln != ts_line).strip()
-        # alt: body = bara raderna efter timestamp
         idx = lines.index(ts_line)
-        body = " ".join(lines[idx + 1:]).strip()
-        # rensa tag-noise
-        body = re.sub(r'<[^>]+>', '', body)
-        body = re.sub(r'\s+', ' ', body).strip()
-        if not body or body in seen_text:
+        # sista non-whitespace raden = nyaste texten i sliding-window
+        body = ""
+        for ln in reversed(lines[idx + 1:]):
+            if ln.strip():
+                body = ln
+                break
+        if not body:
             continue
-        seen_text.add(body)
+        body = re.sub(r'<[^>]+>', '', body)          # <c>, <c.colorX>, <00:00>
+        body = _html.unescape(body)                  # &gt;&gt;, &nbsp;
+        body = body.replace(" ", " ")           # NBSP -> vanlig space
+        body = re.sub(r'\s+', ' ', body).strip()
+        if not body or body in seen:
+            continue
+        seen.add(body)
         cues.append({"start": m.group(1), "end": m.group(2), "text": body})
     return cues
 
