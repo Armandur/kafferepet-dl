@@ -20,15 +20,29 @@ Fullständig kravspec: `kafferepet-downloader-spec.md` (i `/mnt/vmworkspace`).
 
 ```
 config.yaml            huvudkonfig (vid deploy: /state/config.yaml)
-run.py                 entrypoint: argparse, orkestrering, sammanfattning, exit-kod
+run.py                 CLI entrypoint: argparse, orkestrering, exit-kod
 downloader/
   config.py            laser + validerar config.yaml -> dataklasser
   ytdlp.py             bygger yt-dlp-argv (audio/video), kor subprocess
   naming.py            titelparsning (regex), sanering, filnamnsbygge
   tagging.py           mutagen-taggning, format-agnostisk (m4a-atomer + ID3)
   postprocess.py       skannar temp-mapp: parsa -> tagga -> dop om -> flytta
-Dockerfile             python:3.12-slim + ffmpeg/cron/gosu
-entrypoint.sh          tre lagen: argument / RUN_ONCE / cron (se DOCKER.md)
+  lock.py              fcntl-baserad inter-process lock (delat run.py + webUI)
+  episode_index.py     lokal metadata-katalog per show (JSON i /state)
+app/                   FastAPI webUI (kor parallellt med cron i containern)
+  config.py            settings (env)
+  jobs.py              Broadcaster + Runner (en-i-taget, SSE)
+  archive.py           lasa/skriva yt-dlp:s arkivfiler
+  episodes.py          bygger avsnittslista per podd (spellista + arkiv +
+                       lokal metadata + kanalfeed-extras)
+  importer.py          manuell import (YouTube, RSS-enclosure, lokal fil)
+  main.py              FastAPI-app, lifespan, route-registrering
+  routes/api.py        JSON-endpoints + SSE
+  routes/pages.py      HTML-vyer (Jinja2)
+  templates/           index.html, import.html, base.html
+  static/              app.js, style.css
+Dockerfile             python:3.12-slim + ffmpeg/cron/gosu/uvicorn
+entrypoint.sh          fyra lagen: argument / RUN_ONCE / CRON_ONLY / cron+webUI
 ```
 
 ## Flöde
@@ -49,6 +63,32 @@ Temp-mappen (info.json-mappen) är en "att göra"-kö: post-proc körs både fö
 och efter yt-dlp, så en avbruten körning plockas upp nästa gång. `_safe_move`
 gör ett atomiskt `os.replace`, med kopiera-till-`.partial`-fallback över
 filsystemsgräns (ljud: `/state` -> `/podcasts`).
+
+## WebUI
+
+FastAPI + Jinja2 + vanilla JS, körs av uvicorn parallellt med cron i samma
+container (entrypoint backgrundar cron och `exec`ar uvicorn). Inga portar
+behövs internt, port 8000 exponeras utåt.
+
+- **`EpisodesService`** korsar tre datakällor: YouTube-spellistan (via
+  `yt-dlp --dump-json --skip-download`), arkivfilerna och `episode_index`
+  (lokal metadata-katalog). Plus en valfri **kanalfeed-scan** för videor
+  utanför spellistan -- positivt filtrerad på showens `title_regex` så
+  Brända kakor-videor inte hamnar under Kafferepet och tvärtom. 5 min
+  in-memory-cache; mutationer invaliderar.
+- **Lokal metadata-katalog** -- `/state/episodes_<slug>.json` per show.
+  Skrivs av `postprocess.py` (YouTube-flöde) och `app.importer` (RSS/lokal).
+  Innehåller titel, datum, duration, thumbnail-url, källa och filsökvägar.
+  Används för att visa avsnitt utan YouTube-id (bonus-sektionen) och för att
+  bevara metadata om YouTube tar bort en video.
+- **Server-Sent Events** -- `Broadcaster` med tail-historikbuffer (500 rader)
+  så att en nyöppnad flik direkt ser pågående körnings logg.
+- **`flock`-baserad inter-process lock** -- `downloader/lock.py`, default
+  `/state/run.lock`. Tas av `run.py` vid main() och av webUI:s
+  radera/återimport-endpoints. Hindrar att cron och webUI tampas om
+  arkivfiler och temp-mappar.
+- **`Runner.submit(coro)`** -- en uppgift i taget per webUI-process; SSE
+  delas över run.py-subprocesser och importer-coroutiner.
 
 ## Designbeslut
 
@@ -77,8 +117,12 @@ Filnamnsmönstret är medvetet **kodlåst** (spec F1/F3) - inte config-driven.
 - **Justera titel-parsning:** ändra `title_regex` för showen i `config.yaml`.
   Verifiera med `run.py --dry-run` innan skarp körning.
 - **Lägg till en podd:** nytt block under `shows:` med egen `playlist_id`,
-  `title_regex` och fyra distinkta sökvägar.
+  `title_regex` och fyra distinkta sökvägar. Lägg ev. `channel_url` för
+  kanalfeed-sektionen i webUI:t.
 - **Aktivera retention:** sätt `retention_days > 0` på ett spår.
+- **Lägg till en webUI-route:** ny modul under `app/routes/` eller utöka
+  api.py/pages.py och registrera i `main.py`. Statiska resurser i
+  `app/static/`, templates i `app/templates/`.
 
 ## Verifiering
 

@@ -7,6 +7,19 @@
 - Persistent download-arkiv, idempotent körning (temp-mapp som kö).
 - Docker-deploy på Unraid med cron eller RUN_ONCE.
 
+## v1.1 (klart, feat-webui-branchen)
+
+- WebUI (FastAPI + Jinja2 + vanilla JS) som körs parallellt med cron.
+- Dashboard med avsnittslista per podd: thumbnails, status, datum, speltid,
+  predicted filnamn, knappar för importera/återimport/radera.
+- Sektioner per podd: spellistans avsnitt, bonus-specialavsnitt (RSS/lokal),
+  övriga kanalvideor utanför spellistan (kräver `channel_url` i config).
+- Sidnumrering vid >24 avsnitt.
+- Manuell import med review-flow: YouTube-URL, RSS-enclosure, lokal filsökväg.
+- Live-logg via SSE.
+- Lokal metadata-katalog per show (`/state/episodes_<slug>.json`).
+- flock-baserat inter-process lock kring run.py och webUI-mutationer.
+
 ## Planerat / valfritt
 
 - **Notifieringshook** - `run.py:_notify()` är förberedd men loggar bara.

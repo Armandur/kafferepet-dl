@@ -49,9 +49,33 @@ Lokalt pekar `config.yaml`-sökvägarna på container-interna paths (`/podcasts`
 | `--playlist-items SPEC` | yt-dlp `--playlist-items`, t.ex. `1` eller `1-3` |
 | `--dry-run` | testa titel-regex, ladda inte ner (exit 1 om någon titel inte matchar) |
 
+## WebUI
+
+Containern exponerar ett webUI på port 8000 (`http://<host>:8000/`) med:
+
+- **Översikt** -- avsnittslista per podd med thumbnails, status, predicted
+  filnamn, knappar för importera/återimport/radera. Visar tre sektioner per
+  podd: spellistans avsnitt, bonusspecial (RSS-/lokal-importer), och övriga
+  kanalvideor utanför spellistan. Sidnumrering vid >24 avsnitt.
+- **Manuell import** -- review-flow för YouTube-URL (granska metadata + se
+  predicted filnamn innan import), RSS-enclosure (direkt mp3-länk) och lokal
+  filsökväg.
+- **Kör nu** -- triggar samma flöde som det schemalagda jobbet, med filter
+  per podd/spår. Live-logg via Server-Sent Events.
+
+Köra webUI:t lokalt mot fejk-state:
+
+```bash
+YTDLP_BIN=.venv/bin/yt-dlp \
+  STATE_DIR=/mnt/vmworkspace/kafferepet-dl/state \
+  .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8765
+```
+
+Öppna `http://ubuntu-ai:8765/`.
+
 ## Deploy
 
-Docker-container på Unraid, schemalagd via cron. Se [DOCKER.md](DOCKER.md).
+Docker-container på Unraid med cron + webUI samtidigt. Se [DOCKER.md](DOCKER.md).
 
 ## Dokumentation
 
