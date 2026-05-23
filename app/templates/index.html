@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h2>Kör nu</h2>
+  <p>Triggar samma flöde som det schemalagda jobbet. Loggen strömmas nedan.</p>
+  <form id="run-form" class="grid">
+    <label>Podd
+      <select name="show">
+        <option value="">Alla</option>
+        {% for show in shows %}
+        <option value="{{ show.name }}">{{ show.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Spår
+      <select name="track">
+        <option value="">Båda</option>
+        <option value="audio">Ljud</option>
+        <option value="video">Video</option>
+      </select>
+    </label>
+    <label>--playlist-items
+      <input name="playlist_items" placeholder="t.ex. 1 eller 1-3">
+    </label>
+    <label class="checkbox">
+      <input type="checkbox" name="dry_run">
+      Torrkörning (testa titel-regex, ladda inte ner)
+    </label>
+    <div class="actions">
+      <button type="submit" id="run-btn">Kör</button>
+      <span id="status" class="status"></span>
+    </div>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Live-logg</h2>
+  <div class="log-toolbar">
+    <button type="button" id="clear-btn">Rensa</button>
+    <label class="checkbox">
+      <input type="checkbox" id="autoscroll" checked> Auto-scroll
+    </label>
+  </div>
+  <pre id="log" aria-live="polite"></pre>
+</section>
+{% endblock %}

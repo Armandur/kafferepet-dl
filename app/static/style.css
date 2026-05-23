@@ -1,0 +1,84 @@
+/* kafferepet-dl webUI - minimal style, system fonts, mörkt tema. */
+:root {
+  color-scheme: dark light;
+  --bg: #15171a;
+  --panel: #1e2126;
+  --border: #2c2f35;
+  --fg: #e8eaed;
+  --muted: #9aa0a6;
+  --accent: #7ab7ff;
+  --btn: #2c5a8a;
+  --btn-hover: #3a6fa6;
+  --warn: #d9a02b;
+  --err: #d05050;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg); color: var(--fg);
+  line-height: 1.4;
+}
+header {
+  display: flex; align-items: baseline; gap: 2rem;
+  padding: .75rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+header h1 { font-size: 1.1rem; margin: 0; }
+header h1 a { color: var(--fg); text-decoration: none; }
+header nav a {
+  color: var(--muted); text-decoration: none; margin-right: 1rem;
+}
+header nav a:hover { color: var(--fg); }
+main {
+  max-width: 1100px; margin: 1.5rem auto; padding: 0 1rem;
+}
+.card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 6px; padding: 1.25rem 1.5rem; margin-bottom: 1.25rem;
+}
+.card h2 {
+  margin: 0 0 .5rem; font-size: 1.05rem; color: var(--accent);
+}
+.card p { color: var(--muted); margin: .25rem 0 1rem; }
+form.grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: .75rem 1rem; align-items: end;
+}
+form.grid label {
+  display: flex; flex-direction: column; gap: .25rem; font-size: .85rem;
+  color: var(--muted);
+}
+form.grid label.checkbox {
+  flex-direction: row; align-items: center; gap: .5rem;
+}
+input, select, button {
+  background: #2a2d33; color: var(--fg);
+  border: 1px solid var(--border); border-radius: 4px;
+  padding: .5rem .65rem; font: inherit;
+}
+input:focus, select:focus { outline: 2px solid var(--accent); }
+button {
+  background: var(--btn); border-color: var(--btn);
+  cursor: pointer; font-weight: 500;
+}
+button:hover:not(:disabled) { background: var(--btn-hover); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+.actions { display: flex; align-items: center; gap: .75rem; }
+.status { color: var(--muted); font-size: .85rem; }
+.status.running { color: var(--warn); }
+.status.error { color: var(--err); }
+.log-toolbar {
+  display: flex; gap: 1rem; align-items: center; margin-bottom: .5rem;
+}
+.log-toolbar button { padding: .3rem .65rem; }
+pre#log {
+  background: #0e1013; border: 1px solid var(--border); border-radius: 4px;
+  padding: .75rem 1rem; max-height: 60vh; overflow: auto;
+  font-family: "JetBrains Mono", "SF Mono", Consolas, monospace;
+  font-size: .8rem; line-height: 1.5; margin: 0;
+  white-space: pre-wrap; word-break: break-word;
+}
+pre#log .start, pre#log .end { color: var(--accent); }
+pre#log .err { color: var(--err); }
