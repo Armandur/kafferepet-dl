@@ -13,6 +13,7 @@ from pathlib import Path
 
 from app.archive import read_ids
 from app.config import settings
+from downloader import naming
 from downloader.config import load_config
 
 log = logging.getLogger(__name__)
@@ -42,6 +43,7 @@ class EpisodesService:
 
     async def _build(self):
         cfg = load_config(settings.config_path)
+        defaults = cfg.defaults
         shows_out = []
         for show in cfg.shows:
             audio_ids = (read_ids(show.audio.archive)
@@ -60,20 +62,25 @@ class EpisodesService:
                 vid = p_ep["id"]
                 episodes.append(self._make(show, vid, p_ep,
                                            vid in audio_ids, vid in video_ids,
-                                           in_playlist=True))
+                                           in_playlist=True, defaults=defaults))
             extras = sorted((audio_ids | video_ids) - playlist_ids)
             for vid in extras:
                 episodes.append(self._make(show, vid,
                                            {"id": vid, "title": None},
                                            vid in audio_ids, vid in video_ids,
-                                           in_playlist=False))
+                                           in_playlist=False, defaults=defaults))
             shows_out.append({"name": show.name, "episodes": episodes})
         return {"shows": shows_out, "fetched_at": time.time()}
 
     async def _fetch_playlist(self, playlist_id):
+        """Full metadata per video via --dump-json --skip-download.
+
+        Tar ~10-15s for en spellista (jamfort med ~1s for --flat-playlist), men
+        ger upload_date som flat-playlist saknar. Cachas 5 min.
+        """
         ytdlp = os.environ.get("YTDLP_BIN", "yt-dlp")
         proc = await asyncio.create_subprocess_exec(
-            ytdlp, "--flat-playlist", "--dump-json",
+            ytdlp, "--dump-json", "--skip-download", "--no-warnings",
             PLAYLIST_URL.format(playlist_id),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
@@ -88,21 +95,52 @@ class EpisodesService:
             thumb = d.get("thumbnail")
             if not thumb and d.get("thumbnails"):
                 thumb = d["thumbnails"][-1].get("url")
-            out.append({"id": d.get("id"), "title": d.get("title"),
-                        "thumbnail": thumb, "duration": d.get("duration")})
+            out.append({
+                "id": d.get("id"),
+                "title": d.get("title"),
+                "thumbnail": thumb,
+                "duration": d.get("duration"),
+                "upload_date": d.get("upload_date"),  # YYYYMMDD
+                "description": (d.get("description") or "")[:280],
+            })
         return out
 
-    def _make(self, show, vid, ep_data, in_audio, in_video, in_playlist):
+    def _make(self, show, vid, ep_data, in_audio, in_video, in_playlist, defaults):
+        upload_date = ep_data.get("upload_date")
         return {
             "id": vid,
             "title": ep_data.get("title"),
             "thumbnail": (ep_data.get("thumbnail")
                           or f"https://i.ytimg.com/vi/{vid}/default.jpg"),
             "duration": ep_data.get("duration"),
+            "upload_date": upload_date,
             "in_playlist": in_playlist,
             "audio": self._audio_status(show, in_audio),
             "video": self._video_status(show, vid, in_video),
+            "predicted": self._predict_filenames(show, vid, ep_data.get("title"),
+                                                  upload_date, defaults),
         }
+
+    def _predict_filenames(self, show, vid, title, upload_date, defaults):
+        """Returnerar dict med audio/video som filerna SKULLE doapas till."""
+        out = {}
+        if not title:
+            return out
+        num_raw, clean = naming.parse_title(title, show.title_regex)
+        padding = defaults.get("number_padding", 4)
+        missing_mode = defaults.get("on_missing_number", "omit")
+        date_str = upload_date or "00000000"
+        if show.audio and show.audio.enabled:
+            out["audio"] = naming.build_filename(
+                date_str, num_raw, clean,
+                defaults.get("audio_format", "m4a"),
+                padding, missing_mode)
+        if show.video and show.video.enabled:
+            out["video"] = naming.build_filename(
+                date_str, num_raw, clean,
+                defaults.get("video_container", "mp4"),
+                padding, missing_mode, suffix=vid)
+        return out
 
     def _audio_status(self, show, in_archive):
         if show.audio is None or not show.audio.enabled:

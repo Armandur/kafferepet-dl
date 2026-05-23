@@ -149,6 +149,18 @@
     setRunning(busy);  // se till att nya knappar fattar nuvarande state
   }
 
+  function formatDate(yyyymmdd) {
+    if (!yyyymmdd || yyyymmdd.length !== 8) return null;
+    return `${yyyymmdd.slice(0,4)}-${yyyymmdd.slice(4,6)}-${yyyymmdd.slice(6,8)}`;
+  }
+  function formatDuration(seconds) {
+    if (!seconds) return null;
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (h > 0) return `${h} t ${m} min`;
+    return `${m} min`;
+  }
+
   function buildCard(showName, ep) {
     const card = document.createElement("div");
     card.className = "episode-card" + (ep.in_playlist ? "" : " archive-only");
@@ -169,16 +181,41 @@
     title.textContent = ep.title || `(arkivpost ${ep.id})`;
     body.appendChild(title);
 
+    // Datum + speltid pa en metarad
+    const dateStr = formatDate(ep.upload_date);
+    const durStr = formatDuration(ep.duration);
+    if (dateStr || durStr) {
+      const meta = document.createElement("div");
+      meta.className = "card-meta";
+      meta.textContent = [dateStr, durStr].filter(Boolean).join(" · ");
+      body.appendChild(meta);
+    }
+
     if (!ep.in_playlist) {
       const tag = document.createElement("span");
       tag.className = "archive-tag";
       tag.textContent = "Endast i arkiv";
       body.appendChild(tag);
     }
-    body.appendChild(trackRow(showName, ep, "audio", "Ljud"));
-    body.appendChild(trackRow(showName, ep, "video", "Video"));
+    const predicted = ep.predicted || {};
+    body.appendChild(trackBlock(showName, ep, "audio", "Ljud", predicted.audio));
+    body.appendChild(trackBlock(showName, ep, "video", "Video", predicted.video));
     card.appendChild(body);
     return card;
+  }
+
+  function trackBlock(showName, ep, kind, label, predictedFilename) {
+    const wrap = document.createElement("div");
+    wrap.className = "track-block";
+    wrap.appendChild(trackRow(showName, ep, kind, label));
+    if (predictedFilename && ep[kind].status !== "disabled") {
+      const fn = document.createElement("div");
+      fn.className = "predicted-filename";
+      fn.textContent = predictedFilename;
+      fn.title = predictedFilename;
+      wrap.appendChild(fn);
+    }
+    return wrap;
   }
 
   function trackRow(showName, ep, kind, label) {

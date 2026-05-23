@@ -132,6 +132,22 @@ pre#log .err { color: var(--err); }
   padding: .1rem .4rem; border-radius: 3px;
   font-size: .7rem;
 }
+.card-meta {
+  font-size: .75rem;
+  color: var(--muted);
+}
+.track-block {
+  display: flex; flex-direction: column; gap: .15rem;
+}
+.predicted-filename {
+  font-family: "JetBrains Mono", "SF Mono", Consolas, monospace;
+  font-size: .68rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-left: .2rem;
+}
 .track-row {
   display: flex; gap: .4rem; align-items: center;
   flex-wrap: wrap;
