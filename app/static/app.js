@@ -297,6 +297,16 @@
       for (const ep of show.bonus) bonusGrid.appendChild(buildCard(show.name, ep));
       sec.appendChild(bonusGrid);
     }
+    if (show.channel_extras && show.channel_extras.length) {
+      const ch = document.createElement("h4");
+      ch.className = "bonus-header";
+      ch.textContent = `Övriga kanalvideor (${show.channel_extras.length})`;
+      sec.appendChild(ch);
+      const grid = document.createElement("div");
+      grid.className = "episode-grid";
+      for (const ep of show.channel_extras) grid.appendChild(buildCard(show.name, ep));
+      sec.appendChild(grid);
+    }
     return sec;
   }
 

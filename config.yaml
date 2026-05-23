@@ -23,6 +23,8 @@ defaults:
 shows:
   - name: "Kafferepet"
     playlist_id: "PLe409X5iJuqT4y0xaYzMwxlUWkoBkmy63"
+    # Hela kanalens videor (valfri) - listar avsnitt utanfor spellistan i webUI:t
+    channel_url: "https://www.youtube.com/@kafferepetpod/videos"
     # Nummer EFTER titel, t.ex. "Framfordrommar - 243"
     title_regex: '^\s*(?P<title>.+?)\s*[-–—]\s*(?P<num>\d+)\s*$'
     tracks:
@@ -39,6 +41,8 @@ shows:
 
   - name: "Brända kakor"
     playlist_id: "PLe409X5iJuqS2s2G1s6ZdOPxv52pqU5Om"
+    # Brända kakor delar kanal med Kafferepet.
+    channel_url: "https://www.youtube.com/@kafferepetpod/videos"
     # Nummer FORE titel, t.ex. "Brända kakor 123 - Stop". (?i) gor showprefixet
     # tolerant mot framtida felstavning.
     title_regex: '(?i)^\s*Brända\s+kakor\s+(?P<num>\d+)\s*[-–—]\s*(?P<title>.+?)\s*$'

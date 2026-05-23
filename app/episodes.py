@@ -86,10 +86,84 @@ class EpisodesService:
             # Bonus: lokal metadata utan yt_id (RSS-/lokal-import).
             bonus = [self._make_bonus(show, m)
                      for m in local_meta if not m.get("yt_id")]
+            # Kanal-extras: videor pa kanalen som matchar showens regex men
+            # inte ar i spellistan eller arkiven.
+            channel_extras = await self._fetch_channel_extras(
+                show, defaults,
+                exclude_ids=playlist_ids | audio_ids | video_ids)
             shows_out.append({"name": show.name,
                               "episodes": episodes,
-                              "bonus": bonus})
+                              "bonus": bonus,
+                              "channel_extras": channel_extras})
         return {"shows": shows_out, "fetched_at": time.time()}
+
+    async def _fetch_channel_extras(self, show, defaults, exclude_ids):
+        """Skannar kanalen for videor som matchar showens regex men inte
+        finns i spellistan/arkiven. Hybridstrategi: flat-playlist for snabb
+        listning + per-video enrich for att fa upload_date (som flat-playlist
+        saknar). Filtrerar positivt pa title_regex sa Branda kakor-videor inte
+        hamnar under Kafferepet och tvartom (poddarna delar ofta kanal).
+        """
+        if not show.channel_url:
+            return []
+        ytdlp = os.environ.get("YTDLP_BIN", "yt-dlp")
+        proc = await asyncio.create_subprocess_exec(
+            ytdlp, "--flat-playlist", "--playlist-end", "50", "--dump-json",
+            "--no-warnings", show.channel_url,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        stdout, _ = await proc.communicate()
+        candidates = []
+        for line in stdout.decode("utf-8", "replace").splitlines():
+            try:
+                d = json.loads(line)
+            except Exception:
+                continue
+            vid = d.get("id")
+            if not vid or vid in exclude_ids:
+                continue
+            title = d.get("title") or ""
+            if naming.parse_title(title, show.title_regex)[0] is None:
+                continue
+            thumb = d.get("thumbnail")
+            if not thumb and d.get("thumbnails"):
+                thumb = d["thumbnails"][-1].get("url")
+            candidates.append({"id": vid, "title": title, "thumbnail": thumb,
+                               "duration": d.get("duration")})
+
+        # Anrika med upload_date (flat-playlist saknar det) - parallellt.
+        await asyncio.gather(*[self._enrich_video(c) for c in candidates])
+
+        out = []
+        for c in candidates:
+            ep = self._make(show, c["id"], c, False, False,
+                            in_playlist=False, defaults=defaults)
+            ep["is_channel_extra"] = True
+            out.append(ep)
+        return out
+
+    async def _enrich_video(self, c):
+        ytdlp = os.environ.get("YTDLP_BIN", "yt-dlp")
+        proc = await asyncio.create_subprocess_exec(
+            ytdlp, "--dump-json", "--skip-download", "--no-warnings",
+            f"https://www.youtube.com/watch?v={c['id']}",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        stdout, _ = await proc.communicate()
+        if not stdout.strip():
+            return
+        try:
+            d = json.loads(stdout.decode("utf-8", "replace").splitlines()[0])
+        except Exception:
+            return
+        if d.get("upload_date"):
+            c["upload_date"] = d["upload_date"]
+        if d.get("duration"):
+            c["duration"] = d["duration"]
+        if d.get("thumbnail"):
+            c["thumbnail"] = d["thumbnail"]
 
     async def _fetch_playlist(self, playlist_id):
         """Full metadata per video via --dump-json --skip-download.
