@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from app.episodes import EpisodesService
 from app.jobs import Broadcaster, Runner
 from app.routes import api, pages
 
@@ -20,6 +21,7 @@ logging.basicConfig(level=logging.INFO,
 async def lifespan(app: FastAPI):
     broadcaster = Broadcaster()
     app.state.runner = Runner(broadcaster)
+    app.state.episodes = EpisodesService()
     yield
 
 

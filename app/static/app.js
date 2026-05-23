@@ -1,7 +1,7 @@
-// kafferepet-dl webUI - SSE + kor-nu + manuell import.
+// kafferepet-dl webUI - SSE + kor-nu + manuell import + avsnittslista.
 (() => {
   const log = document.getElementById("log");
-  if (!log) return;  // ingen logg-yta pa sidan
+  if (!log) return;
 
   const autoscroll = document.getElementById("autoscroll");
   const clearBtn = document.getElementById("clear-btn");
@@ -18,9 +18,20 @@
     if (autoscroll && autoscroll.checked) log.scrollTop = log.scrollHeight;
   }
 
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    })[c]);
+  }
+
+  let busy = false;
   function setRunning(running) {
+    busy = running;
     if (runBtn) runBtn.disabled = running;
-    importForms.forEach(f => f.querySelectorAll("button").forEach(b => b.disabled = running));
+    importForms.forEach(f => f.querySelectorAll("button")
+                          .forEach(b => b.disabled = running));
+    document.querySelectorAll(".track-row button, .ep-action")
+            .forEach(b => b.disabled = running);
     if (runStatus) {
       runStatus.textContent = running ? "körning pågår..." : "";
       runStatus.className = running ? "status running" : "status";
@@ -37,6 +48,7 @@
     } else if (msg.event === "end") {
       append(`---- klar, exit ${msg.code} ----`, "end");
       setRunning(false);
+      loadEpisodes();   // mutationer kan ha andrat listan
     } else if (msg.event === "error") {
       append(`FEL: ${msg.message}`, "err");
       setRunning(false);
@@ -89,4 +101,177 @@
   });
 
   if (clearBtn) clearBtn.addEventListener("click", () => { log.textContent = ""; });
+
+  // ---- avsnittslista ----
+  const epsContainer = document.getElementById("episodes-container");
+  const epsMeta = document.getElementById("episodes-meta");
+  const refreshBtn = document.getElementById("refresh-episodes");
+  const delDialog = document.getElementById("delete-dialog");
+  let pendingDelete = null;
+
+  const STATUS_LABEL = {
+    imported: "importerad",
+    missing: "saknas",
+    archived_no_file: "fil saknas",
+    disabled: "inaktiv",
+  };
+
+  async function loadEpisodes(refresh = false) {
+    if (!epsContainer) return;
+    if (epsMeta) epsMeta.textContent = "laddar...";
+    try {
+      const r = await fetch("/api/episodes" + (refresh ? "?refresh=1" : ""));
+      const data = await r.json();
+      renderEpisodes(data);
+    } catch (e) {
+      epsContainer.innerHTML = `<p class="err">Kunde inte ladda: ${e}</p>`;
+    }
+  }
+
+  function renderEpisodes(data) {
+    epsContainer.innerHTML = "";
+    for (const show of data.shows) {
+      const sec = document.createElement("div");
+      sec.className = "show-section";
+      const h = document.createElement("h3");
+      h.textContent = `${show.name}  (${show.episodes.length} avsnitt)`;
+      sec.appendChild(h);
+      const grid = document.createElement("div");
+      grid.className = "episode-grid";
+      for (const ep of show.episodes) grid.appendChild(buildCard(show.name, ep));
+      sec.appendChild(grid);
+      epsContainer.appendChild(sec);
+    }
+    if (epsMeta && data.fetched_at) {
+      const ts = new Date(data.fetched_at * 1000).toLocaleString("sv-SE");
+      epsMeta.textContent = `hämtad ${ts}`;
+    }
+    setRunning(busy);  // se till att nya knappar fattar nuvarande state
+  }
+
+  function buildCard(showName, ep) {
+    const card = document.createElement("div");
+    card.className = "episode-card" + (ep.in_playlist ? "" : " archive-only");
+    card.dataset.id = ep.id;
+
+    const img = document.createElement("img");
+    img.src = ep.thumbnail;
+    img.alt = "";
+    img.loading = "lazy";
+    img.onerror = () => { img.style.opacity = ".3"; };
+    card.appendChild(img);
+
+    const body = document.createElement("div");
+    body.className = "card-body";
+
+    const title = document.createElement("div");
+    title.className = "card-title";
+    title.textContent = ep.title || `(arkivpost ${ep.id})`;
+    body.appendChild(title);
+
+    if (!ep.in_playlist) {
+      const tag = document.createElement("span");
+      tag.className = "archive-tag";
+      tag.textContent = "Endast i arkiv";
+      body.appendChild(tag);
+    }
+    body.appendChild(trackRow(showName, ep, "audio", "Ljud"));
+    body.appendChild(trackRow(showName, ep, "video", "Video"));
+    card.appendChild(body);
+    return card;
+  }
+
+  function trackRow(showName, ep, kind, label) {
+    const row = document.createElement("div");
+    row.className = "track-row";
+    const st = ep[kind].status;
+    const badge = document.createElement("span");
+    badge.className = `badge status-${st}`;
+    badge.textContent = `${label}: ${STATUS_LABEL[st] || st}`;
+    row.appendChild(badge);
+    if (st === "disabled") return row;
+
+    if (st === "missing" || st === "archived_no_file") {
+      row.appendChild(actionBtn("Importera", () =>
+        doReimport(ep.id, showName, kind)));
+    } else if (st === "imported") {
+      row.appendChild(actionBtn("Återimport", () =>
+        doReimport(ep.id, showName, kind)));
+      if (kind === "video") {
+        row.appendChild(actionBtn("Radera",
+          () => openDeleteDialog(ep, showName, kind), "danger"));
+      } else {
+        row.appendChild(actionBtn("Glöm arkiv",
+          () => doDelete(ep.id, showName, kind, false), "danger",
+          "Tar bort arkivposten. Ljudfilen lämnas (kan inte hittas via id)."));
+      }
+    }
+    return row;
+  }
+
+  function actionBtn(text, onClick, extraClass, title) {
+    const b = document.createElement("button");
+    b.className = "ep-action" + (extraClass ? " " + extraClass : "");
+    b.textContent = text;
+    if (title) b.title = title;
+    b.onclick = onClick;
+    b.disabled = busy;
+    return b;
+  }
+
+  async function doReimport(id, show, track) {
+    const r = await fetch(`/api/episodes/${id}/reimport`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ show, track }),
+    });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      append(`FEL: ${j.error || r.statusText}`, "err");
+    }
+  }
+
+  function openDeleteDialog(ep, show, track) {
+    if (!delDialog) return;
+    pendingDelete = { id: ep.id, show, track };
+    const target = document.getElementById("delete-target");
+    if (target) target.textContent = `${ep.title || ep.id}  (${track})`;
+    delDialog.returnValue = "";
+    delDialog.showModal();
+  }
+
+  if (delDialog) {
+    delDialog.addEventListener("close", () => {
+      if (!pendingDelete) return;
+      const ret = delDialog.returnValue;
+      if (ret === "keep" || ret === "remove") {
+        doDelete(pendingDelete.id, pendingDelete.show, pendingDelete.track,
+                 ret === "keep");
+      }
+      pendingDelete = null;
+    });
+    delDialog.querySelector(".dialog-cancel").addEventListener("click", e => {
+      e.preventDefault();
+      delDialog.close("cancel");
+    });
+  }
+
+  async function doDelete(id, show, track, keepArchive) {
+    const r = await fetch(`/api/episodes/${id}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ show, track, keep_archive: keepArchive }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      append(`FEL: ${j.error || r.statusText}`, "err");
+      return;
+    }
+    append(`Raderat ${id}/${track}: fil=${j.file_deleted} arkiv=${j.archive_deleted}`,
+           "start");
+    loadEpisodes(true);
+  }
+
+  if (refreshBtn) refreshBtn.addEventListener("click", () => loadEpisodes(true));
+  if (epsContainer) loadEpisodes();
 })();

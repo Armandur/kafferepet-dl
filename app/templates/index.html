@@ -34,6 +34,17 @@
 </section>
 
 <section class="card">
+  <h2>Avsnitt</h2>
+  <div class="card-toolbar">
+    <button type="button" id="refresh-episodes">Uppdatera</button>
+    <span id="episodes-meta" class="muted"></span>
+  </div>
+  <div id="episodes-container">
+    <p class="muted">Laddar...</p>
+  </div>
+</section>
+
+<section class="card">
   <h2>Live-logg</h2>
   <div class="log-toolbar">
     <button type="button" id="clear-btn">Rensa</button>
@@ -43,4 +54,15 @@
   </div>
   <pre id="log" aria-live="polite"></pre>
 </section>
+
+<dialog id="delete-dialog">
+  <h3>Radera avsnitt</h3>
+  <p class="muted" id="delete-target"></p>
+  <p>Vad ska hända med arkivposten?</p>
+  <form method="dialog" class="dialog-actions">
+    <button value="keep">Behåll arkivpost<small>Filen raderas men avsnittet hämtas inte igen automatiskt</small></button>
+    <button value="remove">Ta bort arkivpost<small>Filen raderas och nästa cron-körning kan hämta det igen</small></button>
+    <button value="cancel" class="dialog-cancel">Avbryt</button>
+  </form>
+</dialog>
 {% endblock %}
