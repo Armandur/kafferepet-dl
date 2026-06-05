@@ -7,6 +7,16 @@
 - Persistent download-arkiv, idempotent körning (temp-mapp som kö).
 - Docker-deploy på Unraid med cron eller RUN_ONCE.
 
+## v1.3 (klart)
+
+- **Inbyggd asyncio-scheduler** ersätter cron-i-container. Triggar samma
+  kodväg som "Kör nu", ingen `/proc/1/fd/1`-pipe-akrobatik som var skälet
+  till att cron tyst aldrig körde under v1.2 på Unraid. TZ via Pythons
+  `zoneinfo`. Endpoint `GET /api/scheduler` + diagnostikrad på dashboard:
+  "Schemalagd körning: 0 * * * * (Europe/Stockholm) -- nästa: 2026-06-05
+  19:00:00".
+- `cron`-paketet borttaget ur imagen.
+
 ## v1.2 (klart, feat-v1.2-branchen)
 
 - **Audio-radera med filspårning** via metadata-katalogens audio_path.

@@ -189,6 +189,18 @@ def health(request: Request):
             "locked": is_held()}
 
 
+@router.get("/scheduler")
+def scheduler_status(request: Request):
+    """Visar schemat och nasta planerade korning -- bra for diagnostik."""
+    s = request.app.state.scheduler
+    return {
+        "schedule": s.schedule,
+        "tz": str(s.tz),
+        "next_run": s.next_run.isoformat() if s.next_run else None,
+        "last_run": s.last_run.isoformat() if s.last_run else None,
+    }
+
+
 @router.get("/run/status")
 def run_status(request: Request):
     return {"running": request.app.state.runner.is_running(),

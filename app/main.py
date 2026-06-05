@@ -10,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 from app.episodes import EpisodesService
 from app.jobs import Broadcaster, Runner
 from app.routes import api, pages
+from app.scheduler import Scheduler
 
 BASE = Path(__file__).parent
 logging.basicConfig(level=logging.INFO,
@@ -22,7 +23,12 @@ async def lifespan(app: FastAPI):
     broadcaster = Broadcaster()
     app.state.runner = Runner(broadcaster)
     app.state.episodes = EpisodesService()
-    yield
+    app.state.scheduler = Scheduler(app.state.runner)
+    app.state.scheduler.start()
+    try:
+        yield
+    finally:
+        await app.state.scheduler.stop()
 
 
 app = FastAPI(title="kafferepet-dl webUI", lifespan=lifespan)

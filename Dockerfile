@@ -1,8 +1,9 @@
 FROM python:3.12-slim
 
-# ffmpeg: ljud-/videoextraktion. cron: schemalagd korning. gosu: kora som PUID/PGID.
+# ffmpeg: ljud-/videoextraktion. gosu: kora som PUID/PGID. tzdata: TZ.
+# Schemalaggning sker numera via app.scheduler (asyncio-baserad).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg cron gosu tzdata \
+    && apt-get install -y --no-install-recommends ffmpeg gosu tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

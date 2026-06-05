@@ -63,6 +63,17 @@
 
   fetch("/api/run/status").then(r => r.json()).then(s => setRunning(s.running));
 
+  const schedInfo = document.getElementById("scheduler-info");
+  if (schedInfo) {
+    fetch("/api/scheduler").then(r => r.json()).then(s => {
+      const next = s.next_run
+        ? new Date(s.next_run).toLocaleString("sv-SE")
+        : "okänt";
+      schedInfo.textContent =
+        `Schemalagd körning: ${s.schedule} (${s.tz}) -- nästa: ${next}`;
+    }).catch(() => {});
+  }
+
   async function postJson(url, payload, defaultMsg) {
     setRunning(true);
     const r = await fetch(url, {

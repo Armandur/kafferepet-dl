@@ -57,8 +57,7 @@ De fyra utdatamapparna ska vara fyra **olika** host-mappar.
 | `STATE_DIR` | `/state` | basmapp för arkivfiler, lock, metadata-katalog och temp |
 | `RUN_LOCK_PATH` | `/state/run.lock` | flock-fil som hindrar samtidiga cron/webUI-körningar |
 | `RUN_ONCE` | `false` | `true` = kör en gång och avsluta (utan webUI) |
-| `CRON_ONLY` | `false` | `true` = kör cron-daemon utan webUI |
-| `RUN_ON_START` | `true` | `false` = hoppa initial körning vid start |
+| `RUN_ON_START` | `true` | (oanvänd från v1.3 -- schemalagd körning hanteras av app.scheduler) |
 | `SKIP_YTDLP_UPDATE` | `false` | `true` = hoppa `pip install -U yt-dlp` vid start |
 | `NTFY_URL` | -- | full URL till en ntfy-topic (notiser vid nya filer / fel) |
 | `HA_WEBHOOK_URL` | -- | Home Assistant webhook-URL (POST JSON, samma triggers) |
@@ -66,7 +65,7 @@ De fyra utdatamapparna ska vara fyra **olika** host-mappar.
 **PUID/PGID 99:100** ger filägarskap `nobody:users` - Unraids standard, så Plex
 och poddspelaren kan läsa filerna. Behåll dessa värden på Unraid.
 
-## Fyra körlägen
+## Tre körlägen
 
 Entrypointen väljer läge automatiskt:
 
@@ -75,9 +74,9 @@ Entrypointen väljer läge automatiskt:
    för Unraids "Post Arguments"-fält.
 2. **`RUN_ONCE=true`** - en körning av hela flödet, sedan avslut. För Unraid
    User Scripts som startar containern på schema.
-3. **`CRON_ONLY=true`** - bara cron-daemon i förgrunden (utan webUI).
-4. **Annars** - cron-daemon i bakgrunden + webUI (uvicorn) i förgrunden.
-   Standardläget för Unraid-deploy. Exponera port 8000.
+3. **Annars** - uvicorn (webUI) med en inbyggd asyncio-scheduler som triggar
+   `CRON_SCHEDULE` mot `TZ`. Standardläget för Unraid-deploy. Exponera
+   port 8000. Ingen cron-daemon i containern.
 
 ## Lokal testkörning
 
