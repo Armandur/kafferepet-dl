@@ -106,15 +106,21 @@ class EpisodesService:
         hamnar under Kafferepet och tvartom (poddarna delar ofta kanal).
         """
         if not show.channel_url:
+            log.warning("Kanal-skann hoppas over for %s: channel_url saknas i "
+                        "config (lagg till channel_url under showen)", show.name)
             return []
         ytdlp = os.environ.get("YTDLP_BIN", "yt-dlp")
         proc = await asyncio.create_subprocess_exec(
             ytdlp, "--flat-playlist", "--playlist-end", "50", "--dump-json",
             "--no-warnings", show.channel_url,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
         )
-        stdout, _ = await proc.communicate()
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0 or not stdout.strip():
+            log.warning("Kanal-skann for %s gav inga rader (exit=%s): %s",
+                        show.name, proc.returncode,
+                        stderr.decode("utf-8", "replace").strip()[:300])
         candidates = []
         for line in stdout.decode("utf-8", "replace").splitlines():
             try:
