@@ -28,10 +28,8 @@ def _find_show(name):
 
 
 def _submit(runner, coro):
-    if not runner.submit(coro):
-        return JSONResponse({"ok": False, "error": "Körning pågår redan"},
-                            status_code=409)
-    return {"ok": True}
+    queued = runner.submit(coro)
+    return {"ok": True, "queued": queued}
 
 
 # ---- shows + status ----
@@ -186,6 +184,7 @@ def health(request: Request):
     """Simpel health-check for Docker HEALTHCHECK och Unraid-monitor."""
     return {"ok": True,
             "running": request.app.state.runner.is_running(),
+            "queued": request.app.state.runner.get_queued_count(),
             "locked": is_held()}
 
 
@@ -204,6 +203,7 @@ def scheduler_status(request: Request):
 @router.get("/run/status")
 def run_status(request: Request):
     return {"running": request.app.state.runner.is_running(),
+            "queued": request.app.state.runner.get_queued_count(),
             "locked": is_held()}
 
 

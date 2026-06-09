@@ -87,8 +87,9 @@ behövs internt, port 8000 exponeras utåt.
   `/state/run.lock`. Tas av `run.py` vid main() och av webUI:s
   radera/återimport-endpoints. Hindrar att cron och webUI tampas om
   arkivfiler och temp-mappar.
-- **`Runner.submit(coro)`** -- en uppgift i taget per webUI-process; SSE
-  delas över run.py-subprocesser och importer-coroutiner.
+- **`Runner.submit(coro)`** -- en FIFO-kö med en worker som betar av uppgifter
+  sekventiellt (en i taget); SSE delas över run.py-subprocesser,
+  importer-coroutiner och köändringar.
 
 ## Designbeslut
 

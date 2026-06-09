@@ -82,10 +82,8 @@ class Scheduler:
                 break
             log.info("Scheduler: schemalagd korning triggar")
             self.last_run = datetime.now(self.tz)
-            ok = self.runner.submit(jobs.run_py_subprocess(
+            self.runner.submit(jobs.run_py_subprocess(
                 [], self.runner.broadcaster))
-            if not ok:
-                log.warning("Scheduler: en korning pagar redan, hoppar over")
             # Undvik att samma minut triggar igen om jobbet var snabbt
             try:
                 await asyncio.sleep(60)

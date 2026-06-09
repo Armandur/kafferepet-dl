@@ -25,16 +25,18 @@
   }
 
   let busy = false;
-  function setRunning(running) {
+  let pendingCount = 0;
+  function setRunning(running, queued = 0) {
     busy = running;
-    if (runBtn) runBtn.disabled = running;
-    importForms.forEach(f => f.querySelectorAll("button")
-                          .forEach(b => b.disabled = running));
-    document.querySelectorAll(".track-row button, .ep-action")
-            .forEach(b => b.disabled = running);
+    pendingCount = queued;
+
     if (runStatus) {
-      runStatus.textContent = running ? "körning pågår..." : "";
-      runStatus.className = running ? "status running" : "status";
+      let txt = running ? "körning pågår..." : "";
+      if (pendingCount > 0) {
+        txt = (txt ? txt + " " : "") + `(${pendingCount} i kö)`;
+      }
+      runStatus.textContent = txt;
+      runStatus.className = (running || pendingCount > 0) ? "status running" : "status";
     }
   }
 
@@ -44,14 +46,18 @@
     if (msg.event === "log") append(msg.line);
     else if (msg.event === "start") {
       append(`---- start: ${msg.args.join(" ")} ----`, "start");
-      setRunning(true);
+      setRunning(true, pendingCount);
     } else if (msg.event === "end") {
       append(`---- klar, exit ${msg.code} ----`, "end");
-      setRunning(false);
-      loadEpisodes();   // mutationer kan ha andrat listan
+      setRunning(false, pendingCount);
+      // Refresha forst nar hela kon ar avbetad - annars nollas "Koad..."-
+      // knapparna for jobb som fortfarande star i ko.
+      if (pendingCount === 0) loadEpisodes();
     } else if (msg.event === "error") {
       append(`FEL: ${msg.message}`, "err");
-      setRunning(false);
+      setRunning(false, pendingCount);
+    } else if (msg.event === "queue") {
+      setRunning(msg.running, msg.pending);
     }
   };
   es.onerror = () => {
@@ -61,7 +67,7 @@
     }
   };
 
-  fetch("/api/run/status").then(r => r.json()).then(s => setRunning(s.running));
+  fetch("/api/run/status").then(r => r.json()).then(s => setRunning(s.running, s.queued));
 
   const schedInfo = document.getElementById("scheduler-info");
   if (schedInfo) {
@@ -75,16 +81,16 @@
   }
 
   async function postJson(url, payload, defaultMsg) {
-    setRunning(true);
     const r = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+    const j = await r.json().catch(() => ({}));
     if (!r.ok) {
-      const j = await r.json().catch(() => ({}));
       append(`FEL: ${j.error || defaultMsg || r.statusText}`, "err");
-      setRunning(false);
+    } else if (j.queued !== undefined) {
+      setRunning(busy, j.queued);
     }
   }
 
@@ -195,7 +201,6 @@
       const tdBtn = document.createElement("td");
       const btn = document.createElement("button");
       btn.textContent = "Importera";
-      btn.disabled = busy;
       btn.onclick = () => postJson("/api/import/youtube",
         { url, show: s.show, track: s.track }, "import misslyckades");
       tdBtn.appendChild(btn);
@@ -270,7 +275,6 @@
       const ts = new Date(data.fetched_at * 1000).toLocaleString("sv-SE");
       epsMeta.textContent = `hämtad ${ts}`;
     }
-    setRunning(busy);
   }
 
   const searchInput = document.getElementById("ep-search");
@@ -329,7 +333,6 @@
         }
         nav.appendChild(pageBtn("›", cur < totalPages, () => goPage(cur + 1)));
       }
-      setRunning(busy);
     }
     function goPage(p) { pageState[show.name] = p; renderPage(); }
     function pageBtn(text, enabled, onClick) {
@@ -461,11 +464,11 @@
     }
 
     if (st === "missing" || st === "archived_no_file") {
-      row.appendChild(actionBtn("Importera", () =>
-        doReimport(ep.id, showName, kind)));
+      row.appendChild(actionBtn("Importera", (e) =>
+        doReimport(ep.id, showName, kind, e.currentTarget)));
     } else if (st === "imported") {
-      row.appendChild(actionBtn("Återimport", () =>
-        doReimport(ep.id, showName, kind)));
+      row.appendChild(actionBtn("Återimport", (e) =>
+        doReimport(ep.id, showName, kind, e.currentTarget)));
       row.appendChild(actionBtn("Radera",
         () => openDeleteDialog(ep, showName, kind), "danger"));
       if (kind === "audio") {
@@ -547,19 +550,23 @@
     b.textContent = text;
     if (title) b.title = title;
     b.onclick = onClick;
-    b.disabled = busy;
     return b;
   }
 
-  async function doReimport(id, show, track) {
+  async function doReimport(id, show, track, btn) {
+    const orig = btn ? btn.textContent : null;
+    if (btn) { btn.textContent = "Köad..."; btn.disabled = true; }
     const r = await fetch(`/api/episodes/${id}/reimport`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ show, track }),
     });
+    const j = await r.json().catch(() => ({}));
     if (!r.ok) {
-      const j = await r.json().catch(() => ({}));
       append(`FEL: ${j.error || r.statusText}`, "err");
+      if (btn) { btn.textContent = orig; btn.disabled = false; }
+    } else if (j.queued !== undefined) {
+      setRunning(busy, j.queued);
     }
   }
 

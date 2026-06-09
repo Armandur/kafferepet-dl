@@ -37,25 +37,61 @@ class Broadcaster:
 
 
 class Runner:
-    """Kor en async-uppgift i taget. Hindrar parallella webUI-utlosta jobb.
+    """Kör en async-uppgift i taget via en FIFO-kö.
 
-    OBS: skyddet galler an sa lange BARA webUI-intern parallellism. En cron-
-    korning som startas av cron-daemonen kan annu kollidera; flock-baserad
-    inter-process lock kommer i en senare commit.
+    Runner accepterar valfri coroutine. En worker-loop betar av kön sekventiellt
+    för att undvika kollisioner i flock-lås och sleep_requests.
     """
 
     def __init__(self, broadcaster: Broadcaster):
         self.broadcaster = broadcaster
-        self.task: asyncio.Task | None = None
+        self.queue: deque = deque()
+        self.worker_task: asyncio.Task | None = None
+        self.current_task: asyncio.Task | None = None
 
     def is_running(self) -> bool:
-        return self.task is not None and not self.task.done()
+        """Returnerar True om ett jobb bearbetas just nu."""
+        return self.current_task is not None and not self.current_task.done()
 
-    def submit(self, coro) -> bool:
-        if self.is_running():
-            return False
-        self.task = asyncio.create_task(coro)
-        return True
+    def get_queued_count(self) -> int:
+        """Antal jobb som väntar i kön (exklusive det som körs)."""
+        return len(self.queue)
+
+    def submit(self, coro) -> int:
+        """Lägger till ett jobb i kön och startar workern om den sover."""
+        self.queue.append(coro)
+        queued = len(self.queue)
+        if self.worker_task is None or self.worker_task.done():
+            self.worker_task = asyncio.create_task(self._worker())
+
+        # Publicera kö-status (lite fördröjt så workern hinner starta)
+        asyncio.create_task(self._broadcast_queue())
+        return queued
+
+    async def _broadcast_queue(self):
+        await self.broadcaster.publish({
+            "event": "queue",
+            "pending": self.get_queued_count(),
+            "running": self.is_running()
+        })
+
+    async def _worker(self):
+        while self.queue:
+            coro = self.queue.popleft()
+            await self._broadcast_queue()
+
+            self.current_task = asyncio.create_task(coro)
+            try:
+                await self.current_task
+            except Exception as exc:
+                log.exception("Jobb kraschade i worker")
+                await self.broadcaster.publish({"event": "error", "message": str(exc)})
+                # Se till att 'end' når fram om coroutinen dog tidigt
+                await self.broadcaster.publish({"event": "end", "code": 1})
+            finally:
+                self.current_task = None
+
+            await self._broadcast_queue()
 
 
 async def _stream_subprocess(proc, broadcaster, prefix=""):
