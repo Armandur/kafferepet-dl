@@ -5,3 +5,9 @@ tmp/
 state/
 *.partial
 .claude/settings.local.json
+
+# Gemini-outputloggar
+tmp/gemini/
+devstate/
+config.dev.yaml
+dev.log
