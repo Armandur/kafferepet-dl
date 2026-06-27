@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Config - kafferepet-dl{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Redigera config.yaml</h2>
+  <p>Redigera configfilen direkt. Ändringar valideras innan de sparas och
+  läses färskt per operation -- ingen omstart behövs. En tidsstämplad backup
+  skapas vid varje lyckad sparning (de 10 senaste behålls).</p>
+  <p class="muted">Sökväg: <code id="config-path">{{ config_path }}</code></p>
+  <textarea id="config-editor" spellcheck="false"
+            aria-label="config.yaml">{{ config_content }}</textarea>
+  <div class="actions" style="margin-top: .75rem;">
+    <button type="button" id="save-btn">Spara</button>
+    <button type="button" id="reload-btn">Ladda om från disk</button>
+    <span class="status" id="config-status"></span>
+  </div>
+  <pre id="config-error" class="config-error" hidden></pre>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  const editor = document.getElementById("config-editor");
+  const saveBtn = document.getElementById("save-btn");
+  const reloadBtn = document.getElementById("reload-btn");
+  const status = document.getElementById("config-status");
+  const errBox = document.getElementById("config-error");
+  if (!editor) return;
+
+  function setStatus(text, cls) {
+    status.textContent = text;
+    status.className = "status" + (cls ? " " + cls : "");
+  }
+  function clearError() {
+    errBox.hidden = true;
+    errBox.textContent = "";
+  }
+  function showError(text) {
+    errBox.textContent = text;
+    errBox.hidden = false;
+  }
+
+  saveBtn.addEventListener("click", async () => {
+    clearError();
+    setStatus("Sparar...", "running");
+    saveBtn.disabled = true;
+    try {
+      const res = await fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: editor.value }),
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        const bak = data.backup ? " (backup: " + data.backup + ")" : "";
+        setStatus("Sparad" + bak, "");
+      } else {
+        setStatus("Valideringsfel - inget sparades", "error");
+        showError(data.error || "Okänt fel");
+      }
+    } catch (e) {
+      setStatus("Nätverksfel", "error");
+      showError(String(e));
+    } finally {
+      saveBtn.disabled = false;
+    }
+  });
+
+  reloadBtn.addEventListener("click", async () => {
+    clearError();
+    setStatus("Laddar om...", "running");
+    reloadBtn.disabled = true;
+    try {
+      const res = await fetch("/api/config");
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        editor.value = data.content;
+        setStatus("Omladdad från disk", "");
+      } else {
+        setStatus("Kunde inte ladda", "error");
+        showError(data.error || "Okänt fel");
+      }
+    } catch (e) {
+      setStatus("Nätverksfel", "error");
+      showError(String(e));
+    } finally {
+      reloadBtn.disabled = false;
+    }
+  });
+})();
+</script>
+{% endblock %}

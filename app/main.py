@@ -9,7 +9,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.episodes import EpisodesService
 from app.jobs import Broadcaster, Runner
-from app.routes import api, pages
+from app.routes import api, config, pages
 from app.scheduler import Scheduler
 
 BASE = Path(__file__).parent
@@ -36,3 +36,4 @@ app.state.templates = Jinja2Templates(directory=BASE / "templates")
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 app.include_router(pages.router)
 app.include_router(api.router, prefix="/api")
+app.include_router(config.router, prefix="/api")

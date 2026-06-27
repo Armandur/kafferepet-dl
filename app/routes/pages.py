@@ -1,4 +1,6 @@
 """HTML-vyer."""
+from pathlib import Path
+
 from fastapi import APIRouter, Request
 
 from app.config import settings
@@ -22,4 +24,14 @@ def import_page(request: Request):
     return request.app.state.templates.TemplateResponse(
         request, "import.html",
         {"shows": cfg.shows},
+    )
+
+
+@router.get("/config")
+def config_page(request: Request):
+    path = Path(settings.config_path)
+    content = path.read_text(encoding="utf-8") if path.is_file() else ""
+    return request.app.state.templates.TemplateResponse(
+        request, "config.html",
+        {"config_content": content, "config_path": str(path)},
     )

@@ -90,6 +90,14 @@ behövs internt, port 8000 exponeras utåt.
 - **`Runner.submit(coro)`** -- en FIFO-kö med en worker som betar av uppgifter
   sekventiellt (en i taget); SSE delas över run.py-subprocesser,
   importer-coroutiner och köändringar.
+- **Config-editor** -- `/config` (sida) + `/api/config` (GET/POST) låter
+  `config.yaml` redigeras direkt i webbläsaren i stället för på disk. GET läser
+  `settings.config_path` färskt; POST sparar via `downloader.config.save_config`
+  i ordningen validera (skriv temp i samma katalog, kör `load_config` -> vid fel
+  HTTP 400 och temp raderas, inget skrivs) -> tidsstämplad backup
+  (`config.yaml.bak-ÅÅÅÅMMDD-TTMMSS`, de 10 senaste behålls) -> atomisk
+  `os.replace` -> `episodes.invalidate()`. Endast `settings.config_path` läses/
+  skrivs, aldrig godtyckliga sökvägar.
 
 ## Designbeslut
 
@@ -131,7 +139,11 @@ Filnamnsmönstret är medvetet **kodlåst** (spec F1/F3) - inte config-driven.
 - **Aktivera retention:** sätt `retention_days > 0` på ett spår.
 - **Lägg till en webUI-route:** ny modul under `app/routes/` eller utöka
   api.py/pages.py och registrera i `main.py`. Statiska resurser i
-  `app/static/`, templates i `app/templates/`.
+  `app/static/`, templates i `app/templates/`. Exempel: config-editorn lägger
+  `/config` (sida) i `pages.py`, `/api/config` GET/POST i egen modul
+  `app/routes/config.py` (registrerad i `main.py`), `config.html` i
+  `templates/` och en nav-länk i `base.html`; spar-logiken
+  (validera/backup/atomisk skrivning) bor i `downloader.config.save_config`.
 
 ## Verifiering
 

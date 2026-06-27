@@ -1,6 +1,10 @@
 """Inlasning och validering av config.yaml."""
+import os
 import re
+import shutil
+import time
 from dataclasses import dataclass
+from pathlib import Path
 
 import yaml
 
@@ -102,3 +106,44 @@ def load_config(path):
     if not shows:
         raise ValueError("config: inga 'shows' definierade")
     return Config(defaults=defaults, shows=shows)
+
+
+_MAX_BACKUPS = 10
+
+
+def save_config(path, content):
+    """Validera, backa upp och skriv config-text atomiskt.
+
+    Stegen sker i ordning: skriv content till en temp-fil i samma katalog och
+    kor load_config(temp) for validering. Validerar det inte tas temp bort och
+    undantaget propagerar (anroparen returnerar 400). Annars kopieras nuvarande
+    config till en tidsstamplad backup (de 10 senaste behalls) innan temp-filen
+    flyttas pa plats med os.replace (atomiskt). Returnerar backupfilens namn,
+    eller None om ingen backup gjordes (filen fanns inte sedan tidigare).
+    """
+    cfg_path = Path(path)
+    cfg_dir = cfg_path.parent
+    tmp_path = cfg_dir / f"{cfg_path.name}.tmp-{os.getpid()}"
+
+    tmp_path.write_text(content, encoding="utf-8")
+    try:
+        load_config(tmp_path)
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
+
+    backup_name = None
+    if cfg_path.exists():
+        backup_name = f"{cfg_path.name}.bak-{time.strftime('%Y%m%d-%H%M%S')}"
+        shutil.copy2(cfg_path, cfg_dir / backup_name)
+        _prune_backups(cfg_dir, cfg_path.name)
+
+    os.replace(tmp_path, cfg_path)
+    return backup_name
+
+
+def _prune_backups(cfg_dir, base_name):
+    """Behall bara de _MAX_BACKUPS senaste .bak-filerna for configen."""
+    backups = sorted(cfg_dir.glob(f"{base_name}.bak-*"))
+    for old in backups[:-_MAX_BACKUPS]:
+        old.unlink(missing_ok=True)
