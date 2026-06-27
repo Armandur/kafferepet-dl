@@ -263,12 +263,14 @@ class EpisodesService:
             out["audio"] = naming.build_filename(
                 date_str, num_raw, clean,
                 defaults.get("audio_format", "m4a"),
-                padding, missing_mode)
+                padding, missing_mode,
+                title_template=show.title_template)
         if show.video and show.video.enabled:
             out["video"] = naming.build_filename(
                 date_str, num_raw, clean,
                 defaults.get("video_container", "mp4"),
-                padding, missing_mode, suffix=vid)
+                padding, missing_mode, suffix=vid,
+                title_template=show.title_template)
         return out
 
     def _audio_status(self, show, in_archive, local=None):

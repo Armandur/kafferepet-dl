@@ -40,6 +40,7 @@ class ShowCfg:
     audio: "TrackCfg | None"
     video: "TrackCfg | None"
     channel_url: str = ""
+    title_template: str = ""
 
 
 @dataclass
@@ -96,6 +97,7 @@ def load_config(path):
             audio=_track("audio", tracks.get("audio")),
             video=_track("video", tracks.get("video")),
             channel_url=(s.get("channel_url") or "").strip(),
+            title_template=(s.get("title_template") or "").strip(),
         ))
     if not shows:
         raise ValueError("config: inga 'shows' definierade")

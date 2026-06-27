@@ -57,3 +57,23 @@ shows:
         output_dir: "/plex/Brandakakor"
         archive: "/state/archive_video_brandakakor.txt"
         retention_days: 0
+
+  - name: "Sommarkakor"
+    playlist_id: "PLdoIiw_DRVNk"
+    channel_url: "https://www.youtube.com/@kafferepetpod/videos"
+    # Nummer FORE titel med # och versaler, t.ex. "SOMMARKAKOR #1 – Colgate-korv".
+    title_regex: '(?i)^\s*sommarkakor\s*#?\s*(?P<num>\d+)\s*[-–—]\s*(?P<title>.+?)\s*$'
+    # title_template ger ett avvikande namnformat (omnormaliserad titel + ratt
+    # nummer utan nollutfyllnad): "YYYY-MM-DD - Sommarkakor 1 - Colgate-korv".
+    title_template: "Sommarkakor {num} - {title}"
+    tracks:
+      audio:
+        enabled: true
+        output_dir: "/podcasts/sommarkakor"
+        archive: "/state/archive_audio_sommarkakor.txt"
+        retention_days: 0
+      video:
+        enabled: true
+        output_dir: "/plex/Sommarkakor"
+        archive: "/state/archive_video_sommarkakor.txt"
+        retention_days: 0

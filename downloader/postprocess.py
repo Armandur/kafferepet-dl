@@ -75,7 +75,8 @@ def _process_one(info_path, media_path, show, track, defaults, summary):
     # Video far video-id sist i filnamnet (= mediafilens id-stem); ljud inte.
     suffix = media_path.stem if track.kind == "video" else None
     filename = naming.build_filename(upload_date, num_raw, clean_title, ext,
-                                     padding, missing_mode, suffix=suffix)
+                                     padding, missing_mode, suffix=suffix,
+                                     title_template=show.title_template)
     target = Path(track.output_dir) / filename
 
     if target.exists():
@@ -86,9 +87,9 @@ def _process_one(info_path, media_path, show, track, defaults, summary):
         return
 
     if track.kind == "audio":
-        # Titel-tagg: paddat nummer (spec B3). Track-tagg far ratt nummer.
-        title_tag = (f"{num_raw.zfill(padding)} - {clean_title}"
-                     if num_raw is not None else clean_title)
+        # Titel-tagg: paddat nummer (spec B3) eller mall. Track-tagg far ratt nummer.
+        title_tag = naming.build_title_tag(num_raw, clean_title, padding,
+                                           title_template=show.title_template)
         tagging.tag_file(
             str(media_path),
             title=title_tag,

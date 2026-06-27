@@ -400,7 +400,8 @@ async def import_preview(url: str):
                    else defaults.get("video_container", "mp4"))
             suffix = meta.get("id") if kind == "video" else None
             filename = naming.build_filename(date, num_raw, clean_title, ext,
-                                             padding, missing_mode, suffix=suffix)
+                                             padding, missing_mode, suffix=suffix,
+                                             title_template=show.title_template)
             suggestions.append({
                 "show": show.name,
                 "track": kind,

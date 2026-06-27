@@ -157,7 +157,8 @@ async def _apply_id3_and_move(src: Path, show, broadcaster, source) -> bool:
     upload_date = iso.replace("-", "") if len(iso) == 10 else "00000000"
     ext = src.suffix.lstrip(".") or "mp3"
     filename = naming.build_filename(upload_date, num_raw, clean_title, ext,
-                                     4, "omit")
+                                     4, "omit",
+                                     title_template=show.title_template)
     target = Path(show.audio.output_dir) / filename
 
     if target.exists():
@@ -165,8 +166,8 @@ async def _apply_id3_and_move(src: Path, show, broadcaster, source) -> bool:
                                    "message": f"Målfil finns redan: {target}"})
         return False
 
-    title_tag = (f"{num_raw.zfill(4)} - {clean_title}"
-                 if num_raw is not None else clean_title)
+    title_tag = naming.build_title_tag(num_raw, clean_title, 4,
+                                       title_template=show.title_template)
     await broadcaster.publish({"event": "log",
                                "line": f"Parsad: titel={clean_title!r} num={num_raw} datum={iso}"})
     tagging.tag_file(str(src), title=title_tag, album=show.name,

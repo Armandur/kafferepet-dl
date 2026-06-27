@@ -107,6 +107,14 @@ behövs internt, port 8000 exponeras utåt.
 - **Albumartist lämnas osatt** (spec F4).
 - **Taggning format-agnostisk** - befintlig backlog är `.mp3`, nya filer `.m4a`;
   taggvärdena ska vara identiska så biblioteket visas enhetligt.
+- **`title_template` per podd (valfri, config)** - normalt bygger filnamn/Titel-
+  tagg `0000 - Titel` (nollutfyllt nummer). Sätts `title_template` på en show och
+  numret parsas, byggs titeldelen i stället ur mallen med platshållarna `{num}`
+  (rått nummer, ingen nollutfyllnad) och `{title}` (parsad titel). Sommarkakor
+  använder `"Sommarkakor {num} - {title}"` -> `ÅÅÅÅ-MM-DD - Sommarkakor 1 - Colgate-korv.m4a`.
+  Filnamn och Titel-tagg delar `naming.build_title_tag`/`build_filename` så texten
+  blir identisk (filnamnet saneras, taggen inte). Saknas mallen eller numret
+  faller showen tillbaka på standardformatet (bakåtkompatibelt).
 
 ## Konfiguration
 
@@ -119,7 +127,7 @@ Filnamnsmönstret är medvetet **kodlåst** (spec F1/F3) - inte config-driven.
   Verifiera med `run.py --dry-run` innan skarp körning.
 - **Lägg till en podd:** nytt block under `shows:` med egen `playlist_id`,
   `title_regex` och fyra distinkta sökvägar. Lägg ev. `channel_url` för
-  kanalfeed-sektionen i webUI:t.
+  kanalfeed-sektionen i webUI:t och `title_template` för avvikande namnformat.
 - **Aktivera retention:** sätt `retention_days > 0` på ett spår.
 - **Lägg till en webUI-route:** ny modul under `app/routes/` eller utöka
   api.py/pages.py och registrera i `main.py`. Statiska resurser i
