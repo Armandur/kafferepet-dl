@@ -94,13 +94,15 @@ def _notify(summary):
     if n_new == 0 and n_err == 0:
         return
 
+    # Nivaer enligt ntfy-notifieringspolicyn: fel = "titta idag" (3), nya
+    # avsnitt = digest (2). Cron kor 03:00, sa inget harifran far vacka.
     if n_err:
         message = f"{n_err} fel i senaste körningen ({n_new} nya filer)"
-        priority = "high"
+        priority = "default"
         tags = "warning"
     else:
         message = f"{n_new} nya avsnitt hämtade"
-        priority = "default"
+        priority = "low"
         tags = "tada"
 
     ntfy_url = os.environ.get("NTFY_URL", "").strip()
