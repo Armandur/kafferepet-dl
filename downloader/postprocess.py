@@ -64,6 +64,10 @@ def _process_one(info_path, media_path, show, track, defaults, summary):
     num_raw, clean_title = naming.parse_title(raw_title, show.title_regex)
 
     if num_raw is None:
+        # Raknas som fel: en titel som slutar matcha title_regex betyder oftast
+        # att YouTube-titelformatet andrats, och det maste synas i notisen -
+        # annars ser korningen ut som en vanlig lyckad.
+        summary.add_error(show.name, track.kind, info.get("id") or media_path.stem)
         if missing_mode == "skip":
             log.warning("Avsnitt utan nummer, hoppar (skip): %r", raw_title)
             media_path.unlink(missing_ok=True)
