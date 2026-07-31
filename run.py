@@ -79,6 +79,8 @@ def _notify(summary):
 
     Env-vars:
       NTFY_URL          Full URL till en ntfy-topic (https://ntfy.sh/...)
+      NTFY_TOKEN        Access-token (tk_...) - kravs av privata instanser
+                        som ar deny-all, utelamnas for oppna topics
       HA_WEBHOOK_URL    Home Assistant webhook-URL (POST JSON)
     """
     import json
@@ -103,11 +105,14 @@ def _notify(summary):
 
     ntfy_url = os.environ.get("NTFY_URL", "").strip()
     if ntfy_url:
+        headers = {"Title": "kafferepet-dl", "Priority": priority, "Tags": tags}
+        ntfy_token = os.environ.get("NTFY_TOKEN", "").strip()
+        if ntfy_token:
+            headers["Authorization"] = f"Bearer {ntfy_token}"
         try:
             req = urllib.request.Request(
                 ntfy_url, data=message.encode("utf-8"), method="POST",
-                headers={"Title": "kafferepet-dl",
-                         "Priority": priority, "Tags": tags})
+                headers=headers)
             urllib.request.urlopen(req, timeout=5).read()
             log.info("ntfy: skickade notis till %s", ntfy_url)
         except Exception as exc:

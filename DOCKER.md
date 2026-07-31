@@ -60,6 +60,7 @@ De fyra utdatamapparna ska vara fyra **olika** host-mappar.
 | `RUN_ON_START` | `true` | (oanvänd från v1.3 -- schemalagd körning hanteras av app.scheduler) |
 | `SKIP_YTDLP_UPDATE` | `false` | `true` = hoppa `pip install -U yt-dlp` vid start |
 | `NTFY_URL` | -- | full URL till en ntfy-topic (notiser vid nya filer / fel) |
+| `NTFY_TOKEN` | -- | access-token (`tk_...`); krävs av privata ntfy-instanser, utelämnas för öppna topics |
 | `HA_WEBHOOK_URL` | -- | Home Assistant webhook-URL (POST JSON, samma triggers) |
 
 **PUID/PGID 99:100** ger filägarskap `nobody:users` - Unraids standard, så Plex
